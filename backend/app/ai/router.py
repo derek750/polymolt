@@ -5,12 +5,19 @@ AI pipeline router — single-agent run + orchestrated prediction pipeline.
 from fastapi import APIRouter
 
 from app.ai.pipeline import run_pipeline
-from app.ai.orchestrator import run_orchestrated_pipeline
+from app.ai.orchestrator import (
+    run_orchestrated_pipeline,
+    run_orchestrated_initial,
+    run_orchestrated_phase2,
+)
 from app.ai.schemas import (
     RunRequest,
     RunResponse,
     OrchestratorRequest,
     OrchestratorResponse,
+    OrchestratorPhase1Response,
+    OrchestratorPhase2Request,
+    OrchestratorPhase2Response,
 )
 from app.agents.config import list_agents
 
@@ -55,4 +62,48 @@ def orchestrate(request: OrchestratorRequest):
         model=request.model,
     )
     return OrchestratorResponse(**result)
+
+
+@router.post("/orchestrate/phase1", response_model=OrchestratorPhase1Response)
+def orchestrate_phase1(request: OrchestratorRequest):
+    """
+    Phase 1 of the orchestrated pipeline:
+    1. Optional RAG retrieval (shared context).
+    2. All agents place an initial bet.
+    3. Web scraping for additional non-AI context.
+    """
+    result = run_orchestrated_initial(
+        question=request.question,
+        use_rag=request.use_rag,
+        model=request.model,
+    )
+    return OrchestratorPhase1Response(**result)
+
+
+@router.post("/orchestrate/phase2", response_model=OrchestratorPhase2Response)
+def orchestrate_phase2(request: OrchestratorPhase2Request):
+    """
+    Phase 2 of the orchestrated pipeline:
+    1. Read initial bets + web scrape + RAG context.
+    2. Pick the best-suited agent.
+    3. Run a deep analysis with that agent.
+    """
+    # Convert AgentBet models to plain dicts for the orchestrator.
+    bets = [b.model_dump() for b in request.initial_bets]
+
+    phase2 = run_orchestrated_phase2(
+        question=request.question,
+        initial_bets=bets,
+        web_scrape_snippets=request.web_scrape_snippets,
+        rag_context=request.rag_context,
+        model=request.model,
+    )
+
+    return OrchestratorPhase2Response(
+        question=request.question,
+        initial_bets=request.initial_bets,
+        web_scrape_snippets=request.web_scrape_snippets,
+        rag_context=request.rag_context,
+        **phase2,
+    )
 

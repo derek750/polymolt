@@ -33,12 +33,24 @@ class OrchestratorRequest(BaseModel):
     model: str | None = None
 
 
-class OrchestratorResponse(BaseModel):
+class OrchestratorPhase1Response(BaseModel):
     question: str
     initial_bets: list[AgentBet]
     web_scrape_snippets: list[str]
+    rag_context: str
+
+
+class OrchestratorResponse(OrchestratorPhase1Response):
     assigned_agent_id: str
     assigned_agent_name: str
     expertise_rationale: str
     deep_analysis: str
+
+
+class OrchestratorPhase2Request(OrchestratorPhase1Response):
+    model: str | None = None
+
+
+class OrchestratorPhase2Response(OrchestratorResponse):
+    pass
 
