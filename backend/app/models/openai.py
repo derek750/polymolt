@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from app.config import OPENAI_API_KEY, CHAT_MODEL, EMBED_MODEL
+from app.config import OPENAI_API_KEY, OPENAI_BASE_URL, CHAT_MODEL, EMBED_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,10 @@ def generate(
         return "Error: OPENAI_API_KEY is not set."
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        client = OpenAI(
+            api_key=OPENAI_API_KEY,
+            base_url=OPENAI_BASE_URL if OPENAI_BASE_URL else None
+        )
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -45,7 +48,10 @@ def embed(text: str, model: str | None = None) -> list[float]:
         return []
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        client = OpenAI(
+            api_key=OPENAI_API_KEY,
+            base_url=OPENAI_BASE_URL if OPENAI_BASE_URL else None
+        )
         r = client.embeddings.create(input=[text], model=model)
         return r.data[0].embedding
     except Exception as e:
