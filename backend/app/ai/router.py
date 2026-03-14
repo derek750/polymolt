@@ -5,21 +5,31 @@ AI pipeline router — single-agent run + orchestrated prediction pipeline.
 from fastapi import APIRouter
 
 from app.ai.pipeline import run_pipeline
+<<<<<<< HEAD
 from app.ai.orchestrator import (
     run_orchestrated_pipeline,
     run_orchestrated_initial,
     run_orchestrated_phase2,
 )
+=======
+from app.ai.orchestrator import run_orchestrated_pipeline
+from app.ai.rag import retrieve, add_documents
+>>>>>>> origin/ethan2-rag-pipeline
 from app.ai.schemas import (
     RunRequest,
     RunResponse,
     OrchestratorRequest,
     OrchestratorResponse,
+<<<<<<< HEAD
     OrchestratorPhase1Response,
     OrchestratorPhase2Request,
     OrchestratorPhase2Response,
     ChudbotTestRequest,
     ChudbotTestResponse,
+=======
+    IngestRequest,
+    IngestResponse,
+>>>>>>> origin/ethan2-rag-pipeline
 )
 from app.agents.config import list_agents
 
@@ -82,6 +92,7 @@ def orchestrate(request: OrchestratorRequest):
     return OrchestratorResponse(**result)
 
 
+<<<<<<< HEAD
 @router.post("/orchestrate/phase1", response_model=OrchestratorPhase1Response)
 def orchestrate_phase1(request: OrchestratorRequest):
     """
@@ -123,5 +134,18 @@ def orchestrate_phase2(request: OrchestratorPhase2Request):
         web_scrape_snippets=request.web_scrape_snippets,
         rag_context=request.rag_context,
         **phase2,
+=======
+@router.post("/ingest", response_model=IngestResponse)
+def ingest(request: IngestRequest):
+    """Ingest documents into the vector store."""
+    add_documents(
+        texts=request.texts,
+        ids=request.ids,
+        collection_name=request.collection_name,
+    )
+    return IngestResponse(
+        count=len(request.texts),
+        message=f"Successfully ingested {len(request.texts)} documents into '{request.collection_name}'.",
+>>>>>>> origin/ethan2-rag-pipeline
     )
 

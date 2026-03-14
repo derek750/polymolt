@@ -17,10 +17,12 @@ _store = None
 
 def _get_client():
     import chromadb
+    import os
     from chromadb.config import Settings
     global _store
     if _store is None:
-        _store = chromadb.Client(Settings(anonymized_telemetry=False))
+        db_path = os.path.join(os.getcwd(), "chroma_db")
+        _store = chromadb.PersistentClient(path=db_path, settings=Settings(anonymized_telemetry=False))
     return _store
 
 

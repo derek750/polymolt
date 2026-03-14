@@ -68,3 +68,16 @@ class ChudbotTestRequest(BaseModel):
 class ChudbotTestResponse(RunResponse):
     pass
 
+
+# ── RAG Ingestion ──
+
+class IngestRequest(BaseModel):
+    texts: list[str]
+    ids: list[str] | None = None
+    collection_name: str = "rag"
+
+
+class IngestResponse(BaseModel):
+    count: int
+    message: str
+
