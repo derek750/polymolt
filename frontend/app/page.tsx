@@ -9,7 +9,6 @@ import { TradeFeed } from "@/components/trades/TradeFeed"
 import { AgentGrid } from "@/components/agents/AgentGrid"
 import { AgentDrawer } from "@/components/agents/AgentDrawer"
 import { Region } from "@/types/market"
-import { BarChart2, Zap, TrendingUp } from "lucide-react"
 
 export default function HomePage() {
   const { market, agents, trades, regions, selectedRegion, connectionStatus, selectRegion, resetMarket, shockMarket } = useMarket("scandinavia")
@@ -20,7 +19,7 @@ export default function HomePage() {
   const currentRegion = (regions.find((r) => r.id === selectedRegion) ?? null) as Region | null
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <Header
         regions={regions as Region[]}
         selectedRegion={selectedRegion}
@@ -29,9 +28,9 @@ export default function HomePage() {
         onReset={resetMarket}
       />
 
-      <main className="flex-1 flex flex-col gap-4 p-4 lg:p-5 max-w-[1600px] mx-auto w-full">
-        {/* Top row: market panel + trade feed */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4" style={{ minHeight: 420 }}>
+      <main className="flex-1 flex flex-col gap-4 p-4 lg:p-5 max-w-[1400px] mx-auto w-full">
+        {/* Market + trade feed */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
           <MarketPanel market={market} region={currentRegion} trades={trades} />
           <TradeFeed
             trades={trades}
@@ -39,50 +38,38 @@ export default function HomePage() {
           />
         </div>
 
-        {/* Demo controls row */}
+        {/* Controls */}
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={() => setShowStudyView((v) => !v)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded border text-xs transition-colors ${
               showStudyView
-                ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
-                : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300"
+                ? "bg-neutral-900 border-neutral-900 text-white"
+                : "bg-white border-neutral-200 text-neutral-500 hover:border-neutral-400"
             }`}
           >
-            <BarChart2 className="w-3.5 h-3.5" />
-            {showStudyView ? "Hide" : "Show"} Belief Distribution
+            {showStudyView ? "Hide" : "Show"} Beliefs
           </button>
-          {showStudyView && market && (
-            <span className="text-xs text-slate-600">
-              All agents ranked by current belief estimate vs. market price
-            </span>
-          )}
 
-          {/* Shock event demo buttons */}
           {market?.isRunning && (
             <div className="flex items-center gap-2 ml-auto">
-              <span className="text-xs text-slate-600 hidden sm:block">Demo events:</span>
               <button
                 onClick={() => shockMarket("negative")}
-                title="Inject a crisis event — agents will respond within 2–3 rounds"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20 hover:border-rose-500/50 transition-colors"
+                className="px-3 py-1.5 rounded border border-neutral-200 text-xs text-neutral-500 hover:border-neutral-400 transition-colors"
               >
-                <Zap className="w-3.5 h-3.5" />
-                Shock
+                Shock ↓
               </button>
               <button
                 onClick={() => shockMarket("positive")}
-                title="Inject a recovery event — agents will respond within 2–3 rounds"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/50 transition-colors"
+                className="px-3 py-1.5 rounded border border-neutral-200 text-xs text-neutral-500 hover:border-neutral-400 transition-colors"
               >
-                <TrendingUp className="w-3.5 h-3.5" />
-                Recover
+                Recover ↑
               </button>
             </div>
           )}
         </div>
 
-        {/* Behavior Study View (F4.6) */}
+        {/* Belief distribution */}
         {showStudyView && market && agents.length > 0 && (
           <BehaviorStudyView
             agents={agents}
@@ -91,7 +78,7 @@ export default function HomePage() {
           />
         )}
 
-        {/* Bottom row: agent grid */}
+        {/* Agent grid */}
         <AgentGrid
           agents={agents}
           onAgentClick={(id) => setSelectedAgentId(id)}
@@ -102,7 +89,7 @@ export default function HomePage() {
       {selectedAgentId && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/50"
+            className="fixed inset-0 z-40 bg-black/20"
             onClick={() => setSelectedAgentId(null)}
           />
           <AgentDrawer

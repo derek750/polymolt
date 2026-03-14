@@ -4,7 +4,7 @@ export interface TradeEntry {
   agentId: string
   agentName: string
   agentType: "specialist" | "hybrid" | "master"
-  direction: "BUY" | "SELL"
+  direction: "BUY" | "SELL" | "YES" | "NO"
   size: number
   priceBefore: number
   priceAfter: number

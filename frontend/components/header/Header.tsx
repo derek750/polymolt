@@ -3,7 +3,6 @@
 import { Region } from "@/types/market"
 import { ConnectionStatus } from "@/lib/useMarket"
 import { RegionSelector } from "./RegionSelector"
-import { RotateCcw, Wifi, WifiOff } from "lucide-react"
 
 interface Props {
   regions: Region[]
@@ -13,27 +12,16 @@ interface Props {
   onReset: () => void
 }
 
-const STATUS_STYLES: Record<ConnectionStatus, string> = {
-  connected: "text-emerald-400",
-  connecting: "text-amber-400",
-  disconnected: "text-slate-500",
-  error: "text-rose-400",
-}
-
 export function Header({ regions, selectedRegion, connectionStatus, onSelectRegion, onReset }: Props) {
-  const isConnected = connectionStatus === "connected"
+  const statusText =
+    connectionStatus === "connected" ? "Connected" :
+    connectionStatus === "connecting" ? "Connecting…" :
+    connectionStatus === "error" ? "Error" : "Disconnected"
 
   return (
-    <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-3 bg-slate-950/90 backdrop-blur border-b border-slate-800">
+    <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-3 bg-white border-b border-neutral-200">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-            <span className="text-emerald-400 text-xs font-bold">P</span>
-          </div>
-          <span className="font-bold text-slate-100 text-lg tracking-tight">Polymolt</span>
-        </div>
-        <span className="text-slate-600 text-sm hidden sm:block">|</span>
-        <span className="text-slate-500 text-xs hidden sm:block">Sustainability Prediction Market</span>
+        <span className="font-bold text-neutral-900 text-lg tracking-tight">polymolt</span>
       </div>
 
       <div className="flex items-center gap-3">
@@ -45,21 +33,16 @@ export function Header({ regions, selectedRegion, connectionStatus, onSelectRegi
 
         <button
           onClick={onReset}
-          title="Reset market"
-          className="flex items-center gap-1.5 px-3 py-2 text-xs text-slate-400 bg-slate-800 border border-slate-700 rounded-lg hover:text-slate-200 hover:border-slate-600 transition-colors"
+          className="px-3 py-1.5 text-xs text-neutral-500 border border-neutral-200 rounded hover:border-neutral-400 hover:text-neutral-700 transition-colors"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
           Reset
         </button>
 
-        <div className={`flex items-center gap-1.5 text-xs font-medium ${STATUS_STYLES[connectionStatus]}`}>
-          {isConnected ? (
-            <Wifi className="w-3.5 h-3.5" />
-          ) : (
-            <WifiOff className="w-3.5 h-3.5" />
-          )}
-          <span className="hidden sm:block capitalize">{connectionStatus}</span>
-        </div>
+        <span className={`text-xs ${
+          connectionStatus === "connected" ? "text-neutral-500" : "text-neutral-400"
+        }`}>
+          {statusText}
+        </span>
       </div>
     </header>
   )

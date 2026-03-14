@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #020617;
-  --foreground: #e2e8f0;
+  --background: #ffffff;
+  --foreground: #171717;
 }
 
 @theme inline {
@@ -17,11 +17,11 @@ body {
   color: var(--foreground);
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 4px; height: 4px; }
+/* Minimal scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #475569; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
 /* Slide in from right — agent drawer */
 @keyframes slideInRight {
@@ -29,34 +29,14 @@ body {
   to   { transform: translateX(0); }
 }
 .animate-slide-in-right {
-  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideInRight 0.2s ease-out;
 }
 
 /* Slide in from top — new trade feed entries */
 @keyframes slideInDown {
-  from { opacity: 0; transform: translateY(-6px); }
+  from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-slide-in-down {
-  animation: slideInDown 0.18s ease-out;
-}
-
-/* Pulse once — probability display on price change */
-@keyframes pulseOnce {
-  0%   { opacity: 1; transform: scale(1); }
-  40%  { opacity: 0.6; transform: scale(1.04); }
-  100% { opacity: 1; transform: scale(1); }
-}
-.animate-pulse-once {
-  animation: pulseOnce 0.35s ease-in-out;
-}
-
-/* Flash update — agent card belief change */
-@keyframes flashUpdate {
-  0%   { background-color: transparent; }
-  25%  { background-color: rgba(99, 102, 241, 0.18); }
-  100% { background-color: transparent; }
-}
-.animate-flash-update {
-  animation: flashUpdate 0.55s ease-out;
+  animation: slideInDown 0.15s ease-out;
 }

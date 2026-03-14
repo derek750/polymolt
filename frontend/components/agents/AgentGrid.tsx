@@ -2,7 +2,6 @@
 
 import { Agent } from "@/types/agent"
 import { AgentCard } from "./AgentCard"
-import { Bot } from "lucide-react"
 
 interface Props {
   agents: Agent[]
@@ -13,11 +12,10 @@ export function AgentGrid({ agents, onAgentClick }: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <Bot className="w-4 h-4 text-slate-500" />
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-          Agent Roster
+        <span className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+          Agents
         </span>
-        <span className="text-xs text-slate-600">{agents.length} agents active</span>
+        <span className="text-xs text-neutral-300">{agents.length}</span>
       </div>
       <div className="grid grid-cols-3 gap-3">
         {agents.map((agent) => (
@@ -29,7 +27,7 @@ export function AgentGrid({ agents, onAgentClick }: Props) {
         ))}
         {agents.length === 0 &&
           Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="h-28 rounded-xl bg-slate-900 border border-slate-800 animate-pulse" />
+            <div key={i} className="h-28 rounded-lg bg-neutral-50 border border-neutral-200 animate-pulse" />
           ))
         }
       </div>
