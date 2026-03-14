@@ -29,7 +29,6 @@ agent = AgentConfig(
         "You MUST end your reply with exactly one of these two lines (nothing after it): "
         "Answer: Yes "
         "Answer: No "
-        "Be concise, logical, and evidence-based."
+        "Be concise, logical, and evidence-based. You must reply with yes or no."
     ),
-    model="gemini-2.5-flash",
 )

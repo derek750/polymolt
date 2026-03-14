@@ -83,6 +83,7 @@ def orchestrate(request: OrchestratorRequest):
         question=request.question,
         use_rag=request.use_rag,
         model=request.model,
+        where_filter=request.where_filter,
     )
     return OrchestratorResponse(**result)
 
@@ -177,6 +178,7 @@ def rag_retrieve(request: RagRetrieveRequest):
         request.query,
         top_k=request.top_k,
         collection_name=request.collection_name,
+        where_filter=request.where_filter,
     )
     if not context.strip():
         hint = "Retrieval returned no context (embedding or collection issue). Check OPENAI_API_KEY and EMBED_MODEL."
@@ -195,6 +197,7 @@ def ingest(request: IngestRequest):
         texts=request.texts,
         ids=request.ids,
         collection_name=request.collection_name,
+        metadatas=request.metadatas,
     )
     return IngestResponse(
         count=len(request.texts),

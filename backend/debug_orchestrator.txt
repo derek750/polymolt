@@ -1,0 +1,6 @@
+Starting pipeline for question: Does Toronto General Hospital provide good service?
+Phase 1: Agent 1/2 betting: chudbot1
+Phase 1: Agent 2/2 betting: chudbot2
+Phase 1 complete.
+Phase 2 processing: 1 relevant agents found.
+Triggering agent 1/1: chudbot2
