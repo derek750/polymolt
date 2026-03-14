@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.ai.pipeline import run_pipeline
+from app.ai.stakeholder_pipeline import run_stakeholder_websearch_pipeline
 from app.agents.config import list_agents
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -21,6 +22,32 @@ class RunRequest(BaseModel):
 
 class RunResponse(BaseModel):
     response: str
+
+
+class WebsearchStakeholder(BaseModel):
+    name: str
+    type: str
+    description: str
+
+
+class WebsearchDetail(BaseModel):
+    stakeholder: WebsearchStakeholder
+    search_query: str
+    search_snippet: str
+    reasoning: str
+
+
+class WebsearchRequest(BaseModel):
+    message: str
+    use_rag: bool = True
+    model: str | None = None
+
+
+class WebsearchResponse(BaseModel):
+    message: str
+    stakeholders: list[WebsearchStakeholder]
+    combined_summary: str
+    details: list[WebsearchDetail]
 
 
 @router.get("/agents")
@@ -45,3 +72,17 @@ def run(request: RunRequest):
         model=request.model,
     )
     return RunResponse(response=response)
+
+
+@router.post("/websearch", response_model=WebsearchResponse)
+def websearch(request: WebsearchRequest):
+    """
+    Run the stakeholder-aware websearch pipeline.
+    This is separate from /ai/run and focuses on stakeholders + external search.
+    """
+    result = run_stakeholder_websearch_pipeline(
+        message=request.message,
+        use_rag=request.use_rag,
+        model=request.model,
+    )
+    return WebsearchResponse(**result)
