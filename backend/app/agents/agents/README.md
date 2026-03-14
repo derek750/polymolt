@@ -15,13 +15,18 @@ agent: AgentConfig
 from app.agents.base import AgentConfig
 
 agent = AgentConfig(
-    id="my_agent",           # unique id (used in API and pipeline)
+    id="my_agent",          # unique id (used in API and pipeline)
     name="My Agent",        # display name
     description="Short description for orchestrator and API.",
     system_prompt="Your system prompt for the LLM...",
     model=None,             # optional: e.g. "gemini-2.5-flash" or None for default
 )
 ```
+
+Make sure to have in the system prompt:
+"You MUST end your reply with exactly one of these two lines (nothing after it): "
+"Answer: Yes "
+"Answer: No "
 
 3. Restart the app. The registry discovers the new module automatically.
 
