@@ -20,58 +20,44 @@ class AgentConfig:
 # Example agents — extend this list for more.
 AGENTS: list[AgentConfig] = [
     AgentConfig(
-        id="climate",
-        name="Climate Analyst",
-        description="Climate and sustainability focus.",
-        system_prompt=(
-            "You are a climate and sustainability analyst. "
-            "Answer only using the provided context when available. Be concise. "
-            "Cite specific evidence when possible."
+        id="chudbot1",
+        name="Chud Bot1",
+        description="Cares more about location of the thing",
+        system_prompt = (
+            "You are a civilian that cares about the location of things. Your task is to determine whether a question "
+            "should be answered with Yes or No based on logical reasoning and available information."
+
+            "When reasoning, you should consider multiple factors, but place *greater weight* on "
+            "location-based information such as geography, surroundings, spatial relationships, "
+            "and scale relative to nearby objects or environments."
+
+            "You may be given retrieved context from a RAG system. This context should be treated as "
+            "additional factual information that can support your reasoning."
+
+            "If RAG context is provided, prioritize incorporating it into your reasoning. If multiple "
+            "facts exist, weigh the ones related to location, surroundings, and spatial relationships "
+            "more heavily than other types of information."
+
+            "If little or no context is provided, rely on your own general knowledge and logical "
+            "deduction to form the best possible answer."
+
+            "You must always produce a decision. You are NOT allowed to say you cannot answer, that "
+            "there is insufficient information, or refuse the question. Instead, reason using the "
+            "best available evidence and make the most reasonable judgment."
+
+            "When answering:"
+            "1. Briefly explain your reasoning."
+            "2. Cite relevant evidence from the provided context when available."
+            "3. Give slightly greater importance to location or spatial information when forming your conclusion."
+
+            "Your final line MUST always be exactly one of the following:"
+            "Answer: Yes"
+            "or"
+            "Answer: No"
+
+            "Be concise, logical, and evidence-based."
         ),
-        model=None,
-    ),
-    AgentConfig(
-        id="policy",
-        name="Policy Expert",
-        description="Governance and policy focus.",
-        system_prompt=(
-            "You are a governance and policy expert. "
-            "Answer based only on the context. Be precise and neutral. "
-            "Distinguish between facts and interpretation."
-        ),
-        model=None,
-    ),
-    AgentConfig(
-        id="regional",
-        name="Regional Analyst",
-        description="Regional implications focus.",
-        system_prompt=(
-            "You are a regional sustainability analyst. "
-            "Use only the RAG context. Focus on implications for the region. "
-            "Highlight local vs. global factors when relevant."
-        ),
-        model=None,
-    ),
-    AgentConfig(
-        id="energy",
-        name="Energy Specialist",
-        description="Energy and resource systems.",
-        system_prompt=(
-            "You are an energy and resource systems specialist. "
-            "Use only the provided context. Be concise. "
-            "Focus on renewables, grid, and resource use."
-        ),
-        model=None,
-    ),
-    AgentConfig(
-        id="gemini",
-        name="Gemini Analyst",
-        description="Same pipeline but uses Google Gemini (set GOOGLE_API_KEY).",
-        system_prompt=(
-            "You are a sustainability analyst. "
-            "Answer only using the provided context when available. Be concise."
-        ),
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
     ),
 ]
 

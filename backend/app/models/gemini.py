@@ -1,4 +1,4 @@
-"""Google Gemini provider — chat generation."""
+"""Google Gemini provider — chat generation (uses google-generativeai)."""
 
 from __future__ import annotations
 
@@ -19,18 +19,38 @@ def generate(
     max_tokens: int = 1024,
 ) -> str:
     """Call Gemini with optional system_instruction and return the text response."""
-    model = (model or DEFAULT_MODEL).strip()
+    model_name = (model or DEFAULT_MODEL).strip()
     if not GOOGLE_API_KEY:
         return "Error: GOOGLE_API_KEY is not set."
     try:
-        from google import genai
-        genai.Client(api_key=GOOGLE_API_KEY)
+        import google.generativeai as genai
+        genai.configure(api_key=GOOGLE_API_KEY)
+        
         kwargs: dict = {}
         if system_prompt:
             kwargs["system_instruction"] = system_prompt
-        gen = genai.GenerativeModel(model, **kwargs)
-        resp = gen.generate_content(user_prompt)
+        
+        agent = genai.GenerativeModel(model_name, **kwargs)
+        resp = agent.generate_content(
+            user_prompt,
+            generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens)
+        )
         return (resp.text or "").strip()
     except Exception as e:
         logger.exception("Gemini generate failed")
         return f"Error: {e!s}"
+
+
+def embed(text: str, model: str | None = None) -> list[float]:
+    """Return an embedding vector for *text* using Gemini, or [] on failure."""
+    model_name = (model or "models/embedding-001").strip()
+    if not GOOGLE_API_KEY:
+        return []
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GOOGLE_API_KEY)
+        result = genai.embed_content(model=model_name, content=text, task_type="retrieval_document")
+        return result["embedding"]
+    except Exception as e:
+        logger.warning("Gemini embed failed: %s", e)
+        return []

@@ -212,7 +212,64 @@ def _run_deep_analysis(
     return generate(user, system_prompt=system, model=agent.model or model, max_tokens=1024)
 
 
-# ── Public entry point ───────────────────────────────────────────────────
+# ── Public entry points ─────────────────────────────────────────────────
+
+def run_orchestrated_initial(
+    question: str,
+    use_rag: bool = True,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """
+    Phase 1 of the orchestrated pipeline:
+    1. Optional RAG retrieval (shared context).
+    2. All agents place an initial bet.
+    3. Web scraping for additional non-AI context.
+    """
+    context = retrieve(question, top_k=4) if use_rag else ""
+    bets = _run_all_bets(question, context, model)
+    scrape = scrape_web(question)
+
+    return {
+        "question": question,
+        "initial_bets": bets,
+        "web_scrape_snippets": scrape.snippets,
+        "rag_context": context,
+    }
+
+
+def run_orchestrated_phase2(
+    question: str,
+    initial_bets: list[dict[str, Any]],
+    web_scrape_snippets: list[str],
+    rag_context: str,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """
+    Phase 2 of the orchestrated pipeline:
+    1. Orchestrator reads the initial bets + web data.
+    2. Identifies the best-fit expert agent.
+    3. That agent performs a deep analysis.
+    """
+    bets = initial_bets
+    web_snippets = web_scrape_snippets
+    context = rag_context
+
+    assigned_id, rationale = _identify_expertise(
+        question, bets, web_snippets, model,
+    )
+    assigned_agent = get_agent(assigned_id) or AGENTS[0]
+
+    analysis = _run_deep_analysis(
+        question, assigned_id, bets, web_snippets, context, model,
+    )
+
+    return {
+        "assigned_agent_id": assigned_agent.id,
+        "assigned_agent_name": assigned_agent.name,
+        "expertise_rationale": rationale,
+        "deep_analysis": analysis,
+    }
+
 
 def run_orchestrated_pipeline(
     question: str,
@@ -225,32 +282,19 @@ def run_orchestrated_pipeline(
     2. Orchestrator collects reasons, web-scrapes, identifies expertise,
        assigns the best agent for a deep analysis.
     """
-    # RAG context (shared across all agents)
-    context = retrieve(question, top_k=4) if use_rag else ""
+    # Phase 1 — initial bets + RAG + web scrape
+    phase1 = run_orchestrated_initial(question=question, use_rag=use_rag, model=model)
+    context = phase1["rag_context"]
+    bets = phase1["initial_bets"]
+    web_snippets = phase1["web_scrape_snippets"]
 
-    # Phase 1 — initial bets
-    bets = _run_all_bets(question, context, model)
-
-    # Phase 2a-b — web scrape (pure Python)
-    scrape = scrape_web(question)
-
-    # Phase 2c — identify expertise & assign agent
-    assigned_id, rationale = _identify_expertise(
-        question, bets, scrape.snippets, model,
-    )
-    assigned_agent = get_agent(assigned_id) or AGENTS[0]
-
-    # Phase 2d — deep analysis by the assigned agent
-    analysis = _run_deep_analysis(
-        question, assigned_id, bets, scrape.snippets, context, model,
+    # Phase 2 — expertise selection + deep analysis
+    phase2 = run_orchestrated_phase2(
+        question=question,
+        initial_bets=bets,
+        web_scrape_snippets=web_snippets,
+        rag_context=context,
+        model=model,
     )
 
-    return {
-        "question": question,
-        "initial_bets": bets,
-        "web_scrape_snippets": scrape.snippets,
-        "assigned_agent_id": assigned_agent.id,
-        "assigned_agent_name": assigned_agent.name,
-        "expertise_rationale": rationale,
-        "deep_analysis": analysis,
-    }
+    return {**phase1, **phase2}

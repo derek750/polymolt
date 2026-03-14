@@ -19,6 +19,7 @@ class RunResponse(BaseModel):
 
 # ── Orchestrated pipeline ──
 
+
 class AgentBet(BaseModel):
     agent_id: str
     agent_name: str
@@ -33,12 +34,50 @@ class OrchestratorRequest(BaseModel):
     model: str | None = None
 
 
-class OrchestratorResponse(BaseModel):
+class OrchestratorPhase1Response(BaseModel):
     question: str
     initial_bets: list[AgentBet]
     web_scrape_snippets: list[str]
+    rag_context: str
+
+
+class OrchestratorResponse(OrchestratorPhase1Response):
     assigned_agent_id: str
     assigned_agent_name: str
     expertise_rationale: str
     deep_analysis: str
+
+
+class OrchestratorPhase2Request(OrchestratorPhase1Response):
+    model: str | None = None
+
+
+class OrchestratorPhase2Response(OrchestratorResponse):
+    pass
+
+
+# ── Convenience testing schemas ──
+
+
+class ChudbotTestRequest(BaseModel):
+    message: str
+    use_rag: bool = True
+    model: str | None = None
+
+
+class ChudbotTestResponse(RunResponse):
+    pass
+
+
+# ── RAG Ingestion ──
+
+class IngestRequest(BaseModel):
+    texts: list[str]
+    ids: list[str] | None = None
+    collection_name: str = "rag"
+
+
+class IngestResponse(BaseModel):
+    count: int
+    message: str
 
