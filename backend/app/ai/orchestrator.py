@@ -330,7 +330,15 @@ def _run_deep_analysis(
         web_snippets=snippets_text,
         context_block=ctx,
     )
-    return generate(user, system_prompt=system, model=agent.model or model, max_tokens=1024)
+    analysis = generate(user, system_prompt=system, model=agent.model or model, max_tokens=1024)
+
+    # Add visual RAG indicator
+    if context:
+        header = "🟢 [ORCHESTRATOR: RAG CONTEXT ACTIVE]\n" + "="*40 + "\n"
+    else:
+        header = "🔴 [ORCHESTRATOR: NO RAG CONTEXT FOUND]\n" + "="*40 + "\n"
+    
+    return f"{header}{analysis}"
 
 
 def _run_single_agent_second_bet(

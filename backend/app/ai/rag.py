@@ -33,35 +33,48 @@ def get_collection(name: str = "rag"):
 
 
 def add_documents(texts: list[str], ids: list[str] | None = None, collection_name: str = "rag"):
-    """Add documents to the vector store (embeds and stores)."""
+    """
+    Add documents to the vector store. 
+    If external embeddings fail, falls back to Chroma's local embedding engine.
+    """
     if not texts:
         return
     if ids is None:
         ids = [f"doc_{i}" for i in range(len(texts))]
-    embeddings = [embed(t) for t in texts]
-    if not any(embeddings):
-        logger.warning("No embeddings; is OPENAI_API_KEY set?")
-        return
+    
+    # Try to get external embeddings
+    embeddings = [e for e in (embed(t) for t in texts) if e]
     coll = get_collection(collection_name)
-    coll.add(embeddings=embeddings, documents=texts, ids=ids[:len(texts)])
+    
+    if len(embeddings) == len(texts):
+        # Successfully got all embeddings from API
+        coll.add(embeddings=embeddings, documents=texts, ids=ids[:len(texts)])
+    else:
+        # Fallback: Let Chroma handle its own embeddings locally
+        logger.info("External embeddings failed; using Chroma's built-in local embeddings.")
+        coll.add(documents=texts, ids=ids[:len(texts)])
 
 
 def retrieve_chunks(query: str, top_k: int = 4, collection_name: str = "rag") -> list[str]:
     """
-    Retrieve top_k documents for the query. Returns a list of chunk strings.
-    If no collection or no API key, returns empty list.
+    Retrieve top_k documents for the query. Returns a single context string.
+    Falls back to local query_texts if external embeddings fail.
     """
-    if not OPENAI_API_KEY:
-        return []
     try:
         client = _get_client()
         coll = client.get_collection(name=collection_name)
     except Exception:
-        return []
+        return ""
+
     emb = embed(query)
-    if not emb:
-        return []
-    results = coll.query(query_embeddings=[emb], n_results=min(top_k, 20), include=["documents"])
+    
+    if emb:
+        # Use external embeddings if successful
+        results = coll.query(query_embeddings=[emb], n_results=min(top_k, 20), include=["documents"])
+    else:
+        # Fallback: Query using raw text (Chroma will embed locally)
+        results = coll.query(query_texts=[query], n_results=min(top_k, 20), include=["documents"])
+        
     if not results or not results["documents"] or not results["documents"][0]:
         return []
     return list(results["documents"][0])

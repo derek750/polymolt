@@ -62,9 +62,15 @@ def run_pipeline(
     else:
         context_block = ""
 
-    extra_block = ""
-    if additional_context and additional_context.strip():
-        extra_block = f"Additional context:\n{additional_context.strip()}\n\n"
+    user_content = f"{context_block}{message}"
+    response = generate(user_content, system_prompt=system, model=chat_model, max_tokens=CHAT_MAX_TOKENS)
 
-    user_content = f"{context_block}{extra_block}{message}"
-    return generate(user_content, system_prompt=system, model=chat_model, max_tokens=CHAT_MAX_TOKENS)
+    # Make RAG status extremely obvious in the output
+    if use_rag:
+        if context:
+            header = "🟢 [RAG DETECTED - Context found in database]\n" + "="*40 + "\n"
+        else:
+            header = "🔴 [RAG NOT DETECTED - Search returned no results]\n" + "="*40 + "\n"
+        return f"{header}{response}"
+    
+    return response
