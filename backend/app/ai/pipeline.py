@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from app.config import CHAT_MODEL, OPENAI_API_KEY
+from app.config import CHAT_MODEL, CHAT_MAX_TOKENS, OPENAI_API_KEY
 from app.models import generate
 from app.ai.rag import retrieve
 from app.agents.config import get_agent
@@ -62,4 +62,4 @@ def run_pipeline(
         context_block = ""
 
     user_content = f"{context_block}{message}"
-    return generate(user_content, system_prompt=system, model=chat_model, max_tokens=1024)
+    return generate(user_content, system_prompt=system, model=chat_model, max_tokens=CHAT_MAX_TOKENS)

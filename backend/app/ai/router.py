@@ -10,7 +10,7 @@ from app.ai.orchestrator import (
     run_orchestrated_initial,
     run_orchestrated_phase2,
 )
-from app.ai.rag import retrieve, add_documents
+from app.ai.rag import retrieve, add_documents, get_collection
 from app.ai.schemas import (
     RunRequest,
     RunResponse,
@@ -21,6 +21,8 @@ from app.ai.schemas import (
     OrchestratorPhase2Response,
     ChudbotTestRequest,
     ChudbotTestResponse,
+    RagRetrieveRequest,
+    RagRetrieveResponse,
     IngestRequest,
     IngestResponse,
 )
@@ -126,6 +128,60 @@ def orchestrate_phase2(request: OrchestratorPhase2Request):
         web_scrape_snippets=request.web_scrape_snippets,
         rag_context=request.rag_context,
         **phase2,
+    )
+
+
+@router.post("/rag/retrieve", response_model=RagRetrieveResponse)
+def rag_retrieve(request: RagRetrieveRequest):
+    """
+    Return only the RAG context for a query (no LLM call).
+    Use this to verify that retrieval and embeddings are working.
+    """
+    from app.config import OPENAI_API_KEY
+
+    hint = None
+    if not OPENAI_API_KEY:
+        hint = (
+            "OPENAI_API_KEY is not set. Set it in your environment (or .env in backend/) "
+            "so RAG can compute embeddings for the query and for ingested documents."
+        )
+        return RagRetrieveResponse(
+            query=request.query,
+            context="",
+            has_context=False,
+            hint=hint,
+        )
+
+    try:
+        coll = get_collection(request.collection_name)
+        doc_count = coll.count()
+    except Exception:
+        doc_count = 0
+    if doc_count == 0:
+        hint = (
+            "No documents in the RAG store. Ingest some first, e.g. "
+            'curl -X POST http://localhost:8000/ai/ingest -H "Content-Type: application/json" '
+            '-d \'{"texts": ["Your document text here."]}\''
+        )
+        return RagRetrieveResponse(
+            query=request.query,
+            context="",
+            has_context=False,
+            hint=hint,
+        )
+
+    context = retrieve(
+        request.query,
+        top_k=request.top_k,
+        collection_name=request.collection_name,
+    )
+    if not context.strip():
+        hint = "Retrieval returned no context (embedding or collection issue). Check OPENAI_API_KEY and EMBED_MODEL."
+    return RagRetrieveResponse(
+        query=request.query,
+        context=context,
+        has_context=bool(context.strip()),
+        hint=hint,
     )
 
 
