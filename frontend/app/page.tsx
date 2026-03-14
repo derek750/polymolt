@@ -30,12 +30,14 @@ export default function HomePage() {
 
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-5 max-w-[1400px] mx-auto w-full">
         {/* Market + trade feed */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <MarketPanel market={market} region={currentRegion} trades={trades} />
-          <TradeFeed
-            trades={trades}
-            onAgentClick={(id) => setSelectedAgentId(id)}
-          />
+          <div className="h-[560px]">
+            <TradeFeed
+              trades={trades}
+              onAgentClick={(id) => setSelectedAgentId(id)}
+            />
+          </div>
         </div>
 
         {/* Controls */}
