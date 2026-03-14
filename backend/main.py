@@ -4,12 +4,16 @@ Routers: /ai (pipeline), /db (database placeholder).
 """
 
 import logging
+import os
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.ai_router import router as ai_router
 from app.routers.db_router import router as db_router
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
