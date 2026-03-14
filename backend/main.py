@@ -8,7 +8,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import pipeline_router, database_router
+from app.routers import ai_router, db_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,8 +27,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(pipeline_router)
-app.include_router(database_router)
+app.include_router(ai_router)
+app.include_router(db_router)
 
 
 @app.get("/")
