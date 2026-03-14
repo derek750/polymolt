@@ -3,6 +3,8 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
+# ── Single-agent run (kept for backwards compat) ──
+
 class RunRequest(BaseModel):
     message: str
     system_prompt: str | None = None
@@ -15,28 +17,28 @@ class RunResponse(BaseModel):
     response: str
 
 
-class WebsearchStakeholder(BaseModel):
-    name: str
-    type: str
-    description: str
+# ── Orchestrated pipeline ──
 
-
-class WebsearchDetail(BaseModel):
-    stakeholder: WebsearchStakeholder
-    search_query: str
-    search_snippet: str
+class AgentBet(BaseModel):
+    agent_id: str
+    agent_name: str
+    answer: str          # "YES" or "NO"
+    confidence: int      # 0-100
     reasoning: str
 
 
-class WebsearchRequest(BaseModel):
-    message: str
+class OrchestratorRequest(BaseModel):
+    question: str
     use_rag: bool = True
     model: str | None = None
 
 
-class WebsearchResponse(BaseModel):
-    message: str
-    stakeholders: list[WebsearchStakeholder]
-    combined_summary: str
-    details: list[WebsearchDetail]
+class OrchestratorResponse(BaseModel):
+    question: str
+    initial_bets: list[AgentBet]
+    web_scrape_snippets: list[str]
+    assigned_agent_id: str
+    assigned_agent_name: str
+    expertise_rationale: str
+    deep_analysis: str
 

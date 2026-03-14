@@ -1,16 +1,16 @@
 """
-AI pipeline router — run the RAG + agent pipeline and list agents.
+AI pipeline router — single-agent run + orchestrated prediction pipeline.
 """
 
 from fastapi import APIRouter
 
 from app.ai.pipeline import run_pipeline
-from app.ai.stakeholder_pipeline import run_stakeholder_websearch_pipeline
+from app.ai.orchestrator import run_orchestrated_pipeline
 from app.ai.schemas import (
     RunRequest,
     RunResponse,
-    WebsearchRequest,
-    WebsearchResponse,
+    OrchestratorRequest,
+    OrchestratorResponse,
 )
 from app.agents.config import list_agents
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 @router.get("/agents")
 def agents():
-    """List configured agents (id, name, description). Use agent_type=id in POST /run."""
+    """List configured agents (id, name, description)."""
     return {
         "agents": [
             {"id": a.id, "name": a.name, "description": a.description, "model": a.model}
@@ -30,7 +30,7 @@ def agents():
 
 @router.post("/run", response_model=RunResponse)
 def run(request: RunRequest):
-    """Run the pipeline: RAG (optional) + specialized system prompt + LLM."""
+    """Run a single-agent pipeline: RAG (optional) + system prompt + LLM."""
     response = run_pipeline(
         message=request.message,
         system_prompt=request.system_prompt,
@@ -41,16 +41,18 @@ def run(request: RunRequest):
     return RunResponse(response=response)
 
 
-@router.post("/websearch", response_model=WebsearchResponse)
-def websearch(request: WebsearchRequest):
+@router.post("/orchestrate", response_model=OrchestratorResponse)
+def orchestrate(request: OrchestratorRequest):
     """
-    Run the stakeholder-aware websearch pipeline.
-    This is separate from /ai/run and focuses on stakeholders + external search.
+    Orchestrated prediction pipeline:
+    1. All agents place an initial bet (YES/NO + confidence + reasoning).
+    2. Orchestrator web-scrapes, identifies the best expertise, and
+       assigns one agent for a deep analysis.
     """
-    result = run_stakeholder_websearch_pipeline(
-        message=request.message,
+    result = run_orchestrated_pipeline(
+        question=request.question,
         use_rag=request.use_rag,
         model=request.model,
     )
-    return WebsearchResponse(**result)
+    return OrchestratorResponse(**result)
 
