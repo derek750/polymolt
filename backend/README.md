@@ -11,12 +11,18 @@ export OPENAI_API_KEY=your_key_here
 python -m uvicorn main:app --reload --port 8000
 ```
 
+## Routes
+
+- **/**, **/health** — App info and health.
+- **/ai/run** — Run the pipeline (POST). **/ai/agents** — List agents (GET).
+- **/db/health** — Database router placeholder (GET); add DB routes in `app/api/database.py` later.
+
 ## Trigger the pipeline
 
-**POST /run** — the pipeline runs on every call.
+**POST /ai/run** — the pipeline runs on every call.
 
 ```bash
-curl -X POST http://localhost:8000/run \
+curl -X POST http://localhost:8000/ai/run \
   -H "Content-Type: application/json" \
   -d '{"message": "What are the main climate risks for Scandinavia?"}'
 ```
@@ -46,8 +52,10 @@ Response:
 
 ## Layout
 
-- **main.py** — FastAPI app; **POST /run** calls `run_pipeline()`.
-- **app/pipeline.py** — Builds prompt (system + RAG context + message), calls OpenAI, returns response.
+- **main.py** — FastAPI app; mounts routers from `app/api/`.
+- **app/api/pipeline.py** — AI router (`/ai`): POST /ai/run, GET /ai/agents.
+- **app/api/database.py** — DB router (`/db`): placeholder for future database routes.
+- **app/pipeline.py** — Builds prompt (system + RAG context + message), calls LLM, returns response.
 - **app/rag.py** — Embeddings + Chroma retrieval.
 - **app/config.py** — Env config.
 - **langflow_pipeline/** — Reference flow JSON (same logic as the code).
