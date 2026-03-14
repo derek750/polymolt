@@ -1,119 +1,122 @@
 "use client"
 
-import { useState } from "react"
-import { useMarket } from "@/lib/useMarket"
-import { Header } from "@/components/header/Header"
-import { MarketPanel } from "@/components/market/MarketPanel"
-import { BehaviorStudyView } from "@/components/market/BehaviorStudyView"
-import { TradeFeed } from "@/components/trades/TradeFeed"
-import { AgentGrid } from "@/components/agents/AgentGrid"
-import { AgentDrawer } from "@/components/agents/AgentDrawer"
-import { RegionNews } from "@/components/region/RegionNews"
-import { Region } from "@/types/market"
-import { QuestionMenu } from "@/components/questions/QuestionMenu"
+import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 
-export default function HomePage() {
-  const { market, agents, trades, regions, selectedRegion, connectionStatus, selectRegion, resetMarket, shockMarket } = useMarket("scandinavia")
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
-  const [showStudyView, setShowStudyView] = useState(false)
-  const [showQuestions, setShowQuestions] = useState(false)
+export default function HeroPage() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [logoError, setLogoError] = useState(false)
 
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null
-  const currentRegion = (regions.find((r) => r.id === selectedRegion) ?? null) as Region | null
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    let animationId: number
+    let phase = 0
+    const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio : 1)
+
+    const resize = () => {
+      const w = window.innerWidth
+      const h = window.innerHeight
+      canvas.width = w * dpr
+      canvas.height = h * dpr
+      canvas.style.width = `${w}px`
+      canvas.style.height = `${h}px`
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    }
+
+    const draw = () => {
+      const w = canvas.width / dpr
+      const h = canvas.height / dpr
+      ctx.clearRect(0, 0, w, h)
+
+      const lineCount = 5
+      const baseY = h * 0.6
+      const amp = h * 0.15
+      const step = 80
+
+      for (let L = 0; L < lineCount; L++) {
+        ctx.beginPath()
+        const offset = (L / lineCount) * Math.PI * 0.4 + phase * 0.3
+        for (let x = 0; x <= w + step; x += step) {
+          const t = x / w + offset + phase * 0.02
+          const y =
+            baseY -
+            amp * Math.sin(t * 2) -
+            amp * 0.5 * Math.sin(t * 5 + 1) +
+            (L - lineCount / 2) * 25
+          if (x === 0) ctx.moveTo(x, y)
+          else ctx.lineTo(x, y)
+        }
+        const alpha = 0.08 + (L / lineCount) * 0.12
+        ctx.strokeStyle = `rgba(23, 23, 23, ${alpha})`
+        ctx.lineWidth = 1.5
+        ctx.stroke()
+      }
+
+      phase += 0.008
+      animationId = requestAnimationFrame(draw)
+    }
+
+    resize()
+    window.addEventListener("resize", resize)
+    draw()
+    return () => {
+      window.removeEventListener("resize", resize)
+      cancelAnimationFrame(animationId)
+    }
+  }, [])
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      <Header
-        regions={regions as Region[]}
-        selectedRegion={selectedRegion}
-        connectionStatus={connectionStatus}
-        onSelectRegion={selectRegion}
-        onReset={resetMarket}
-        onOpenQuestions={() => setShowQuestions(true)}
+    <div className="relative min-h-screen bg-white overflow-hidden flex flex-col items-center justify-center">
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        aria-hidden
       />
 
-      <main className="flex-1 flex flex-col gap-4 p-4 lg:p-5 max-w-[1400px] mx-auto w-full">
-        {/* Market + trade feed + news for selected region */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <div className="flex flex-col gap-4">
-            <MarketPanel market={market} region={currentRegion} trades={trades} />
-            <RegionNews region={currentRegion} />
+      <div className="relative z-10 flex flex-col items-center gap-8 px-6">
+        <div className="flex items-center justify-center gap-6">
+          <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0">
+            {!logoError ? (
+              <img
+                src="/logo.png"
+                alt="Polymolt"
+                className="object-contain w-full h-full"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <svg
+                viewBox="0 0 100 120"
+                className="w-full h-full text-neutral-900"
+                aria-hidden
+              >
+                <path
+                  fill="currentColor"
+                  d="M50 8 L58 18 L55 28 L60 35 L58 45 L62 55 L58 65 L50 75 L42 65 L38 55 L42 45 L40 35 L45 28 L42 18 Z M30 40 L20 50 L25 60 L30 55 Z M70 40 L80 50 L75 60 L70 55 Z M50 75 L45 85 L50 95 L55 85 Z M50 95 L40 105 L50 115 L60 105 Z"
+                />
+              </svg>
+            )}
           </div>
-          <div className="h-[560px]">
-            <TradeFeed
-              trades={trades}
-              onAgentClick={(id) => setSelectedAgentId(id)}
-            />
-          </div>
+          <h1 className="font-bold text-neutral-900 text-4xl sm:text-5xl md:text-6xl tracking-tight">
+            polymolt
+          </h1>
         </div>
 
-        {/* Controls */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={() => setShowStudyView((v) => !v)}
-            className={`px-3 py-1.5 rounded border text-xs transition-colors ${
-              showStudyView
-                ? "bg-neutral-900 border-neutral-900 text-white"
-                : "bg-white border-neutral-200 text-neutral-500 hover:border-neutral-400"
-            }`}
-          >
-            {showStudyView ? "Hide" : "Show"} Beliefs
-          </button>
+        <p className="text-neutral-500 text-center text-sm sm:text-base max-w-md">
+          Sustainability prediction market — explore by location
+        </p>
 
-          {market?.isRunning && (
-            <div className="flex items-center gap-2 ml-auto">
-              <button
-                onClick={() => shockMarket("negative")}
-                className="px-3 py-1.5 rounded border border-neutral-200 text-xs text-neutral-500 hover:border-neutral-400 transition-colors"
-              >
-                Shock ↓
-              </button>
-              <button
-                onClick={() => shockMarket("positive")}
-                className="px-3 py-1.5 rounded border border-neutral-200 text-xs text-neutral-500 hover:border-neutral-400 transition-colors"
-              >
-                Recover ↑
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Belief distribution */}
-        {showStudyView && market && agents.length > 0 && (
-          <BehaviorStudyView
-            agents={agents}
-            marketPrice={market.currentPrice}
-            onAgentClick={(id) => setSelectedAgentId(id)}
-          />
-        )}
-
-        {/* Agent grid */}
-        <AgentGrid
-          agents={agents}
-          onAgentClick={(id) => setSelectedAgentId(id)}
-        />
-      </main>
-
-      {/* Agent detail drawer */}
-      {selectedAgentId && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/20"
-            onClick={() => setSelectedAgentId(null)}
-          />
-          <AgentDrawer
-            agent={selectedAgent}
-            marketPrice={market?.currentPrice}
-            onClose={() => setSelectedAgentId(null)}
-          />
-        </>
-      )}
-
-      {/* Question history & creation drawer */}
-      <QuestionMenu
-        open={showQuestions}
-        onClose={() => setShowQuestions(false)}
-      />
+        <Link
+          href="/map"
+          className="mt-4 px-6 py-3 rounded-lg bg-neutral-900 text-white font-medium text-sm hover:bg-neutral-800 transition-colors"
+        >
+          Explore map
+        </Link>
+      </div>
     </div>
   )
 }

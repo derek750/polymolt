@@ -29,7 +29,15 @@ body {
   to   { transform: translateX(0); }
 }
 .animate-slide-in-right {
-  animation: slideInRight 0.2s ease-out;
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInBottom {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.animate-slide-in-bottom {
+  animation: slideInBottom 0.3s ease-out;
 }
 
 /* Slide in from top — new trade feed entries */
@@ -39,4 +47,12 @@ body {
 }
 .animate-slide-in-down {
   animation: slideInDown 0.15s ease-out;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.pulse-ring {
+  box-sizing: border-box;
 }
