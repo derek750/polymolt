@@ -18,6 +18,8 @@ from app.ai.schemas import (
     OrchestratorPhase1Response,
     OrchestratorPhase2Request,
     OrchestratorPhase2Response,
+    ChudbotTestRequest,
+    ChudbotTestResponse,
 )
 from app.agents.config import list_agents
 
@@ -46,6 +48,22 @@ def run(request: RunRequest):
         model=request.model,
     )
     return RunResponse(response=response)
+
+
+@router.post("/run/chudbot1", response_model=ChudbotTestResponse)
+def run_chudbot1(request: ChudbotTestRequest):
+    """
+    Convenience endpoint to test the `chudbot1` agent directly.
+    Uses the same pipeline as /ai/run but forces agent_type="chudbot1".
+    """
+    response = run_pipeline(
+        message=request.message,
+        system_prompt=None,
+        agent_type="chudbot1",
+        use_rag=request.use_rag,
+        model=request.model,
+    )
+    return ChudbotTestResponse(response=response)
 
 
 @router.post("/orchestrate", response_model=OrchestratorResponse)

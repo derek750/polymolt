@@ -19,6 +19,7 @@ class RunResponse(BaseModel):
 
 # ── Orchestrated pipeline ──
 
+
 class AgentBet(BaseModel):
     agent_id: str
     agent_name: str
@@ -52,5 +53,18 @@ class OrchestratorPhase2Request(OrchestratorPhase1Response):
 
 
 class OrchestratorPhase2Response(OrchestratorResponse):
+    pass
+
+
+# ── Convenience testing schemas ──
+
+
+class ChudbotTestRequest(BaseModel):
+    message: str
+    use_rag: bool = True
+    model: str | None = None
+
+
+class ChudbotTestResponse(RunResponse):
     pass
 
