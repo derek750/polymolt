@@ -32,7 +32,7 @@ def get_collection(name: str = "rag"):
     return client.get_or_create_collection(name=name, metadata={"description": "RAG documents"})
 
 
-def add_documents(texts: list[str], ids: list[str] | None = None, collection_name: str = "rag"):
+def add_documents(texts: list[str], ids: list[str] | None = None, collection_name: str = "rag", metadatas: list[dict] | None = None):
     """Add documents to the vector store (embeds and stores)."""
     if not texts:
         return
@@ -43,10 +43,10 @@ def add_documents(texts: list[str], ids: list[str] | None = None, collection_nam
         logger.warning("No embeddings; is OPENAI_API_KEY set?")
         return
     coll = get_collection(collection_name)
-    coll.add(embeddings=embeddings, documents=texts, ids=ids[:len(texts)])
+    coll.add(embeddings=embeddings, documents=texts, ids=ids[:len(texts)], metadatas=metadatas[:len(texts)] if metadatas else None)
 
 
-def retrieve_chunks(query: str, top_k: int = 4, collection_name: str = "rag") -> list[str]:
+def retrieve_chunks(query: str, top_k: int = 4, collection_name: str = "rag", where_filter: dict | None = None) -> list[str]:
     """
     Retrieve top_k documents for the query. Returns a list of chunk strings.
     If no collection or no API key, returns empty list.
@@ -61,16 +61,25 @@ def retrieve_chunks(query: str, top_k: int = 4, collection_name: str = "rag") ->
     emb = embed(query)
     if not emb:
         return []
-    results = coll.query(query_embeddings=[emb], n_results=min(top_k, 20), include=["documents"])
+        
+    query_kwargs = {
+        "query_embeddings": [emb],
+        "n_results": min(top_k, 20),
+        "include": ["documents"]
+    }
+    if where_filter:
+        query_kwargs["where"] = where_filter
+        
+    results = coll.query(**query_kwargs)
     if not results or not results["documents"] or not results["documents"][0]:
         return []
     return list(results["documents"][0])
 
 
-def retrieve(query: str, top_k: int = 4, collection_name: str = "rag") -> str:
+def retrieve(query: str, top_k: int = 4, collection_name: str = "rag", where_filter: dict | None = None) -> str:
     """
     Retrieve top_k documents for the query. Returns a single context string.
     If no collection or no API key, returns empty string.
     """
-    chunks = retrieve_chunks(query, top_k=top_k, collection_name=collection_name)
+    chunks = retrieve_chunks(query, top_k=top_k, collection_name=collection_name, where_filter=where_filter)
     return "\n\n".join(chunks) if chunks else ""

@@ -32,6 +32,7 @@ class OrchestratorRequest(BaseModel):
     question: str
     use_rag: bool = True
     model: str | None = None
+    where_filter: dict | None = None
 
 
 class OrchestratorPhase1Response(BaseModel):
@@ -83,6 +84,7 @@ class RagRetrieveRequest(BaseModel):
     query: str
     top_k: int = 4
     collection_name: str = "rag"
+    where_filter: dict | None = None
 
 
 class RagRetrieveResponse(BaseModel):
@@ -98,6 +100,7 @@ class IngestRequest(BaseModel):
     texts: list[str]
     ids: list[str] | None = None
     collection_name: str = "rag"
+    metadatas: list[dict] | None = None
 
 
 class IngestResponse(BaseModel):
