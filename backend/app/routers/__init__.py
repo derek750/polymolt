@@ -1,6 +1,6 @@
-"""API routers — pipeline (AI) and database (placeholder for later)."""
+"""API routers — AI pipeline and database (placeholder)."""
 
-from app.api.pipeline import router as pipeline_router
-from app.api.database import router as database_router
+from app.routers.ai_router import router as ai_router
+from app.routers.db_router import router as db_router
 
-__all__ = ["pipeline_router", "database_router"]
+__all__ = ["ai_router", "db_router"]

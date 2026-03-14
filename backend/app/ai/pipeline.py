@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 
 from app.config import CHAT_MODEL, OPENAI_API_KEY, GOOGLE_API_KEY
-from app.rag import retrieve
+from app.ai.rag import retrieve
 from app.agents.config import get_agent
 
 logger = logging.getLogger(__name__)
