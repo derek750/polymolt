@@ -38,5 +38,12 @@ def generate(
 
 
 def embed(text: str, model: str | None = None) -> list[float]:
-    """Return an embedding vector (OpenAI only for now)."""
+    """Return an embedding vector, routed by available key or model name."""
+    from app.config import OPENAI_API_KEY
+    resolved = (model or "").strip().lower()
+    
+    # If explicit Gemini model or no OpenAI key, use Gemini
+    if resolved.startswith("models/") or not OPENAI_API_KEY:
+        return _gemini.embed(text, model=model)
+    
     return _openai.embed(text, model=model)

@@ -23,6 +23,35 @@ export function QuestionMenu({ open, onClose }: Props) {
   const [newLocation, setNewLocation] = useState("")
   const [creating, setCreating] = useState(false)
 
+  // Temporary test states
+  const [testResponse, setTestResponse] = useState<string | null>(null)
+  const [testingRag, setTestingRag] = useState(false)
+
+  const handleTestRag = async () => {
+    if (!selectedQuestion) return
+    setTestingRag(true)
+    setTestResponse(null)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/ai/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: selectedQuestion.question_text,
+          use_rag: true,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      setTestResponse(data.response)
+    } catch (e) {
+      console.error("RAG test failed", e)
+      setError("RAG test failed. Check backend console.")
+    } finally {
+      setTestingRag(false)
+    }
+  }
+
   // Fetch recent questions when drawer opens
   useEffect(() => {
     if (!open) return
@@ -47,6 +76,7 @@ export function QuestionMenu({ open, onClose }: Props) {
 
   // Fetch detail when selectedId changes
   useEffect(() => {
+    setTestResponse(null)
     if (!open || selectedId == null) {
       setDetail(null)
       return
@@ -253,6 +283,25 @@ export function QuestionMenu({ open, onClose }: Props) {
                       {selectedQuestion.yes_count} yes / {selectedQuestion.no_count} no
                     </span>
                   </div>
+                </div>
+
+                {/* TEMPORARY RAG TEST BUTTON */}
+                <div className="bg-neutral-50 border border-neutral-200 rounded p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-neutral-500 uppercase">RAG Lab (Temporary)</span>
+                    <button
+                      onClick={handleTestRag}
+                      disabled={testingRag}
+                      className="px-2 py-1 bg-neutral-900 text-white text-[10px] rounded hover:bg-neutral-800 disabled:opacity-50 transition-colors"
+                    >
+                      {testingRag ? "Running..." : "Run RAG Test"}
+                    </button>
+                  </div>
+                  {testResponse && (
+                    <div className="text-[11px] text-neutral-700 bg-white border border-neutral-100 p-2 rounded max-h-40 overflow-y-auto whitespace-pre-wrap">
+                      {testResponse}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-neutral-100 pt-2 flex-1 flex flex-col gap-2">

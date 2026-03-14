@@ -4,3 +4,5 @@ node_modules
 __pycache__
 
 .env
+backend/chroma_db
+backend/test_out.txt

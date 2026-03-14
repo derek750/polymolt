@@ -6,11 +6,14 @@ from fastapi import APIRouter
 
 from app.ai.pipeline import run_pipeline
 from app.ai.orchestrator import run_orchestrated_pipeline
+from app.ai.rag import retrieve, add_documents
 from app.ai.schemas import (
     RunRequest,
     RunResponse,
     OrchestratorRequest,
     OrchestratorResponse,
+    IngestRequest,
+    IngestResponse,
 )
 from app.agents.config import list_agents
 
@@ -55,4 +58,18 @@ def orchestrate(request: OrchestratorRequest):
         model=request.model,
     )
     return OrchestratorResponse(**result)
+
+
+@router.post("/ingest", response_model=IngestResponse)
+def ingest(request: IngestRequest):
+    """Ingest documents into the vector store."""
+    add_documents(
+        texts=request.texts,
+        ids=request.ids,
+        collection_name=request.collection_name,
+    )
+    return IngestResponse(
+        count=len(request.texts),
+        message=f"Successfully ingested {len(request.texts)} documents into '{request.collection_name}'.",
+    )
 
