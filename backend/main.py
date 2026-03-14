@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers.ai_router import router as ai_router
-from app.routers.db_router import router as db_router
+from app.ai.router import router as ai_router
+from app.db.router import router as db_router
 
 load_dotenv()
 
