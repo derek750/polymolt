@@ -21,8 +21,8 @@ export async function askLocation(body: AskLocationBody): Promise<AskLocationRes
     body: JSON.stringify(body),
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err?.message ?? err?.error ?? `Request failed: ${res.status}`)
+    const err = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
+    throw new Error(err?.error ?? err?.message ?? `Request failed: ${res.status}`)
   }
   return res.json()
 }
@@ -37,8 +37,8 @@ export async function getLocationHistory(locationName: string): Promise<HistoryI
     `${API_BASE}/location/history?name=${encodeURIComponent(locationName)}`
   )
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err?.message ?? err?.error ?? `Request failed: ${res.status}`)
+    const err = await res.json().catch(() => ({})) as { message?: string; error?: string }
+    throw new Error(err?.error ?? err?.message ?? `Request failed: ${res.status}`)
   }
   const data: HistoryResponse = await res.json()
   return data.history ?? []
