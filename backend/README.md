@@ -45,10 +45,11 @@ Response:
 - **EMBED_MODEL** (optional): Default `text-embedding-3-small`.
 - **CHAT_MODEL** (optional): Default `gpt-4o-mini`.
 
-## RAG
+## RAG (Astra DB)
 
-- The app uses **ChromaDB** in-memory for the vector store. If no documents have been added, RAG returns no context and the prompt still runs with "(No RAG context loaded.)".
-- To add documents, use the `app.rag` module (e.g. from a script or an admin route): `add_documents(texts, ids)`.
+- The app uses **DataStax Astra DB** as the vector store (via `astrapy`). If Astra is not configured or no documents have been added, RAG returns no context.
+- **Env:** `ASTRA_DB_API_ENDPOINT` (e.g. `https://<db-id>-<region>.apps.astra.datastax.com`), `ASTRA_DB_APPLICATION_TOKEN` (e.g. `AstraCS:...`). Optional: `ASTRA_DB_KEYSPACE` (default `default_keyspace`), `ASTRA_EMBED_DIMENSION` (default `1536` for text-embedding-3-small).
+- To add documents, use `app.ai.rag`: `add_documents(texts, ids=..., collection_name=..., metadatas=...)`.
 
 ## IBM Db2 — saving orchestrate responses
 
@@ -81,7 +82,7 @@ You can also query Db2 directly (e.g. IBM Cloud console → Query editor): `SELE
 - **app/ai/router.py** — AI router (`/ai`): POST /ai/run, POST /ai/orchestrate, GET /ai/agents, etc.
 - **app/db/router.py** — DB router (`/db`): POST /db/questions, GET /db/questions, GET /db/questions/{id}, GET /db/questions/{id}/orchestrate.
 - **app/ai/pipeline.py** — Builds prompt (system + RAG context + message), calls LLM, returns response.
-- **app/ai/rag.py** — Embeddings + Chroma retrieval.
+- **app/ai/rag.py** — Embeddings + Astra DB vector retrieval.
 - **app/config.py** — Env config.
 - **scripts/db2_orchestrate_schema.sql** — Db2 DDL for orchestrate_runs and phase column.
 - **langflow_pipeline/** — Reference flow JSON (same logic as the code).

@@ -9,7 +9,11 @@ OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "")
 GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
 EMBED_MODEL: str = os.getenv("EMBED_MODEL", "text-embedding-3-small")
-# When no model is set (no tokens / empty), use this for LLM calls.
-DEFAULT_MODEL_NO_TOKENS: str = "openai/gpt-oss-120b"
-CHAT_MODEL: str = os.getenv("CHAT_MODEL", DEFAULT_MODEL_NO_TOKENS)
+CHAT_MODEL: str = os.getenv("CHAT_MODEL", "gpt-4o-mini")
 CHAT_MAX_TOKENS: int = int(os.getenv("CHAT_MAX_TOKENS", "4096"))
+
+# Astra DB (vector store for RAG)
+ASTRA_DB_API_ENDPOINT: str = os.getenv("ASTRA_DB_API_ENDPOINT", "")
+ASTRA_DB_APPLICATION_TOKEN: str = os.getenv("ASTRA_DB_APPLICATION_TOKEN", "")
+ASTRA_DB_KEYSPACE: str = os.getenv("ASTRA_DB_KEYSPACE", "default_keyspace")
+ASTRA_EMBED_DIMENSION: int = int(os.getenv("ASTRA_EMBED_DIMENSION", "1536"))

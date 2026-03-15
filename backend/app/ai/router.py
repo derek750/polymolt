@@ -196,6 +196,7 @@ def rag_retrieve(request: RagRetrieveRequest):
     Use this to verify that retrieval and embeddings are working.
     """
     from app.config import OPENAI_API_KEY
+    from app.models import embed
 
     hint = None
     if not OPENAI_API_KEY:
@@ -210,9 +211,23 @@ def rag_retrieve(request: RagRetrieveRequest):
             hint=hint,
         )
 
+    emb = embed(request.query)
+    if not emb:
+        return RagRetrieveResponse(
+            query=request.query,
+            context="",
+            has_context=False,
+            hint="Embedding failed. Check OPENAI_API_KEY or GOOGLE_API_KEY and EMBED_MODEL.",
+        )
+    actual_name = f"{request.collection_name}_{len(emb)}"
     try:
-        coll = get_collection(request.collection_name)
-        doc_count = coll.count()
+        coll = get_collection(actual_name)
+        doc_count = coll.count_documents(filter={}, upper_bound=100_000)
+    except RuntimeError as e:
+        if "Astra" in str(e) or "ASTRA" in str(e):
+            hint = "Astra DB is not configured. Set ASTRA_DB_API_ENDPOINT and ASTRA_DB_APPLICATION_TOKEN in .env."
+            return RagRetrieveResponse(query=request.query, context="", has_context=False, hint=hint)
+        doc_count = 0
     except Exception:
         doc_count = 0
     if doc_count == 0:

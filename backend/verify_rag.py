@@ -3,13 +3,9 @@ load_dotenv()
 
 from app.ai.rag import add_documents, retrieve, get_collection
 import os
-import shutil
 
 def test_rag_flow():
-    # 1. Clean up old test data if exists
-    if os.path.exists("chroma_db"):
-        print("Note: Using existing chroma_db directory.")
-
+    # Requires ASTRA_DB_API_ENDPOINT and ASTRA_DB_APPLICATION_TOKEN in .env
     test_collection = "test_verification"
     test_texts = ["The sky is blue today.", "Python is a programming language."]
     test_ids = ["sky_doc", "py_doc"]
@@ -31,6 +27,5 @@ def test_rag_flow():
         print("Tip: Check your API keys and regional availability.")
 
 if __name__ == "__main__":
-    # Ensure we are in the backend directory or have it in path
-    # For this test to work, we need an OPENAI_API_KEY in .env
+    # Run from backend/. Needs OPENAI_API_KEY (or GOOGLE_API_KEY) and Astra DB env vars in .env.
     test_rag_flow()
