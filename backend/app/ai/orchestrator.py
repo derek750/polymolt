@@ -23,7 +23,8 @@ from typing import Any, Iterator
 
 from app.models import generate
 from app.ai.pipeline import run_pipeline
-from app.ai.rag import retrieve, retrieve_chunks
+from app.ai.rag import retrieve, retrieve_chunks, embed as embed_text
+from app.ai.bet_sizing import get_bet_for_agent, compute_confidence
 
 # Placeholder for the question prompt until a real one is wired in.
 QUESTION_PROMPT_PLACEHOLDER = "[Placeholder: question prompt for the prediction market]"
@@ -52,7 +53,6 @@ Evaluate this location/claim from your area of expertise.
 Respond with ONLY a strict JSON object (no prose before or after):
 {{
   "answer": "YES" or "NO",
-  "confidence": <integer 0-100>,
   "reasoning": "<1-3 sentence explanation>"
 }}
 """
@@ -63,6 +63,7 @@ def _run_single_bet(
     agent: AgentConfig,
     context: str,
     model: str | None,
+    question_embedding: list[float] | None = None,
 ) -> dict[str, Any]:
     ctx = f"Context:\n{context}" if context else "(No additional context.)"
     system = _BET_SYSTEM.format(agent_name=agent.name, system_prompt=agent.system_prompt)
@@ -73,14 +74,23 @@ def _run_single_bet(
         data = json.loads(raw)
     except Exception:
         logger.warning("Agent %s returned non-JSON bet: %s", agent.id, raw)
-        data = {"answer": "UNKNOWN", "confidence": 0, "reasoning": raw}
+        data = {"answer": "UNKNOWN", "reasoning": raw}
+
+    reasoning = str(data.get("reasoning", ""))
+    bet_info = get_bet_for_agent(
+        agent,
+        question_prompt=question,
+        response_text=reasoning,
+        question_embedding=question_embedding,
+    )
+    confidence = compute_confidence(bet_info)
 
     return {
         "agent_id": agent.id,
         "agent_name": agent.name,
         "answer": str(data.get("answer", "UNKNOWN")).upper(),
-        "confidence": int(data.get("confidence", 0)),
-        "reasoning": str(data.get("reasoning", "")),
+        "confidence": confidence,
+        "reasoning": reasoning,
     }
 
 
@@ -89,10 +99,11 @@ def _run_all_bets(
     context: str,
     model: str | None,
 ) -> list[dict[str, Any]]:
+    q_emb = embed_text(question)
     bets = []
     for i, agent in enumerate(AGENTS):
         _debug_log(f"Phase 1: Agent {i+1}/{len(AGENTS)} betting: {agent.id}")
-        bets.append(_run_single_bet(question, agent, context, model))
+        bets.append(_run_single_bet(question, agent, context, model, question_embedding=q_emb))
     return bets
 
 
@@ -101,6 +112,7 @@ def _run_single_agent_bet(
     question: str,
     use_rag: bool,
     model: str | None,
+    question_embedding: list[float] | None = None,
 ) -> dict[str, Any]:
     """Run pipeline for one agent and return bet dict. Used for parallel phase1."""
     raw = run_pipeline(
@@ -112,13 +124,20 @@ def _run_single_agent_bet(
     try:
         data = json.loads(raw)
         answer = str(data.get("answer", "UNKNOWN")).upper()
-        confidence = int(data.get("confidence", 0))
         reasoning = str(data.get("reasoning", ""))
     except Exception:
         logger.warning("Agent %s pipeline returned non-JSON: %s", agent.id, raw[:200])
         answer = "UNKNOWN"
-        confidence = 0
         reasoning = raw
+
+    bet_info = get_bet_for_agent(
+        agent,
+        question_prompt=question,
+        response_text=reasoning,
+        question_embedding=question_embedding,
+    )
+    confidence = compute_confidence(bet_info)
+
     return {
         "agent_id": agent.id,
         "agent_name": agent.name,
@@ -137,9 +156,10 @@ def _run_phase1_via_pipeline(
     Phase 1 using /run pipeline: run run_pipeline for each agent (same as POST /run per agent).
     Returns list of bets; each response is parsed as JSON if possible, else reasoning=response.
     """
+    q_emb = embed_text(question)
     bets: list[dict[str, Any]] = []
     for agent in AGENTS:
-        bet = _run_single_agent_bet(agent, question, use_rag, model)
+        bet = _run_single_agent_bet(agent, question, use_rag, model, question_embedding=q_emb)
         bets.append(bet)
     return bets
 
@@ -161,10 +181,11 @@ def run_phase1_stream(
         rag_chunks = []
         rag_context = ""
 
+    q_emb = embed_text(question)
     bets: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=len(AGENTS)) as executor:
         future_to_agent = {
-            executor.submit(_run_single_agent_bet, agent, question, use_rag, model): agent
+            executor.submit(_run_single_agent_bet, agent, question, use_rag, model, q_emb): agent
             for agent in AGENTS
         }
         for future in as_completed(future_to_agent):
@@ -310,13 +331,11 @@ of whether the answer is YES or NO, and your overall confidence level.
 """
 
 
-def _parse_agent_analysis(raw_analysis: str) -> tuple[str, int, str]:
-    """Parse the agent's final deep analysis to extract Answer and Confidence."""
+def _parse_agent_analysis(raw_analysis: str) -> tuple[str, str]:
+    """Parse the agent's final deep analysis to extract Answer."""
     answer = "UNKNOWN"
-    confidence = 0
     clean_analysis = raw_analysis.strip()
-    
-    # Try to find "Answer: Yes/No" at the end
+
     lines = [line.strip() for line in clean_analysis.split("\n") if line.strip()]
     if lines:
         last_line = lines[-1].lower()
@@ -324,17 +343,8 @@ def _parse_agent_analysis(raw_analysis: str) -> tuple[str, int, str]:
             answer = "YES"
         elif "answer: no" in last_line:
             answer = "NO"
-            
-    # Heuristic for confidence: looking for "confidence: X%" or similar
-    # (Optional: the prompt asks for it, but for now we'll keep it simple or look for numbers)
-    import re
-    conf_match = re.search(r"confidence:\s*(\d+)", clean_analysis.lower())
-    if conf_match:
-        confidence = int(conf_match.group(1))
-    elif answer != "UNKNOWN":
-        confidence = 70  # Default if they gave an answer but no clear confidence
-        
-    return answer, confidence, clean_analysis
+
+    return answer, clean_analysis
 
 
 def _run_deep_analysis(
@@ -344,6 +354,7 @@ def _run_deep_analysis(
     web_snippets: list[str],
     context: str,
     model: str | None,
+    question_embedding: list[float] | None = None,
 ) -> tuple[str, int, str]:
     """Returns (answer, confidence, analysis_text)."""
     agent = get_agent(agent_id) or AGENTS[0]
@@ -364,8 +375,16 @@ def _run_deep_analysis(
         context_block=ctx,
     )
     raw = generate(user, system_prompt=system, model=agent.model or model, max_tokens=1024)
-    answer, confidence, clean_analysis = _parse_agent_analysis(raw)
-    # Add visual RAG indicator to analysis text
+    answer, clean_analysis = _parse_agent_analysis(raw)
+
+    bet_info = get_bet_for_agent(
+        agent,
+        question_prompt=question,
+        response_text=clean_analysis,
+        question_embedding=question_embedding,
+    )
+    confidence = compute_confidence(bet_info)
+
     if context:
         header = "🟢 [ORCHESTRATOR: RAG CONTEXT ACTIVE]\n" + "="*40 + "\n"
     else:
@@ -379,6 +398,7 @@ def _run_single_agent_second_bet(
     question: str,
     rag_context_for_agent: str,
     model: str | None,
+    question_embedding: list[float] | None = None,
 ) -> dict[str, Any]:
     """Run pipeline for one relevant agent with orchestrator-assigned RAG; return bet dict."""
     agent = get_agent(agent_id) or AGENTS[0]
@@ -392,13 +412,20 @@ def _run_single_agent_second_bet(
     try:
         data = json.loads(raw)
         answer = str(data.get("answer", "UNKNOWN")).upper()
-        confidence = int(data.get("confidence", 0))
         reasoning = str(data.get("reasoning", ""))
     except Exception:
         logger.warning("Agent %s second bet returned non-JSON: %s", agent_id, raw[:200])
         answer = "UNKNOWN"
-        confidence = 0
         reasoning = raw
+
+    bet_info = get_bet_for_agent(
+        agent,
+        question_prompt=question,
+        response_text=reasoning,
+        question_embedding=question_embedding,
+    )
+    confidence = compute_confidence(bet_info)
+
     return {
         "agent_id": agent.id,
         "agent_name": agent.name,
@@ -493,6 +520,7 @@ def run_orchestrated_phase2(
         model=model,
     )
 
+    q_emb = embed_text(question)
     _debug_log(f"Phase 2 processing: {len(relevant_agents_info)} relevant agents found.")
     triggered_agents: list[dict[str, Any]] = []
     for i, info in enumerate(relevant_agents_info):
@@ -510,6 +538,7 @@ def run_orchestrated_phase2(
             web_snippets=web_snippets,
             context=agent_specific_rag,
             model=model,
+            question_embedding=q_emb,
         )
 
         triggered_agents.append({
@@ -594,6 +623,8 @@ def run_phase2_stream(
         for r in relevant_agents_info
     ]
 
+    q_emb = embed_text(question)
+
     yield {
         "event": "orchestrator_done",
         "topic_reasoning": topic_reasoning,
@@ -613,6 +644,7 @@ def run_phase2_stream(
                     question,
                     ctx,
                     model,
+                    q_emb,
                 ): aid
                 for aid, ctx in agent_rag_map.items()
             }
@@ -629,6 +661,7 @@ def run_phase2_stream(
         web_snippets=web_snippets,
         context=agent_specific_rag,
         model=model,
+        question_embedding=q_emb,
     )
     yield {"event": "deep_analysis_done", "deep_analysis": analysis}
 
