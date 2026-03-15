@@ -8,3 +8,5 @@ __pycache__
 .ipynb_checkpoints
 backend/chroma_db
 backend/test_out.txt
+
+backend/app/data/*.parquet
