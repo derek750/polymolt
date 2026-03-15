@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/logo.png" alt="Polymolt" width="200" />
   <h1>Polymolt</h1>
-  <p>AI-powered prediction market where specialized agents bet on real-world claims<br>Multi-agent orchestration with RAG retrieval, LMSR pricing, and live Server-Sent Events (SSE) streaming</p>
+  <p>AI-powered prediction market where specialized agents bet on real-world claims<br>Multi-agent orchestration with RAG retrieval, LMSR pricing, and real-time market visualization</p>
 
 </div>  
 
