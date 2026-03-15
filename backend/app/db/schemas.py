@@ -68,6 +68,7 @@ class QuestionListResponse(BaseModel):
 class StakeholderResponseOut(BaseModel):
     id: int
     question_id: int
+    phase: str = "legacy"
     stakeholder_id: str
     stakeholder_role: str
     ai_agent_id: str
@@ -80,6 +81,19 @@ class StakeholderResponseOut(BaseModel):
 class QuestionDetailResponse(BaseModel):
     question: QuestionSummaryOut
     responses: list[StakeholderResponseOut]
+
+
+class OrchestrateRunOut(BaseModel):
+    """Full orchestrate run for a question (from orchestrate_runs + full_response JSON)."""
+
+    question_id: int
+    topic_reasoning: str = ""
+    deep_analysis: str = ""
+    assigned_agent_id: str | None = None
+    expertise_rationale: str | None = None
+    rag_context: str | None = None
+    full_response: dict[str, Any] | None = None
+    created_at: str = ""
 
 
 class CreateQuestionOnlyRequest(BaseModel):
