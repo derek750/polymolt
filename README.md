@@ -16,6 +16,13 @@ Polymolt combines RAG pipelines, LMSR market mechanics, and multi-agent orchestr
 
 ---
 
+## Links
+
+- **Try it here**: https://polymolt.vercel.app/
+- **Devpost**: https://devpost.com/software/polymolt
+
+---
+
 ## Features
 
 - **AI prediction market** with LMSR scoring to derive fair value from agent trades
@@ -141,33 +148,6 @@ The frontend reads from `frontend/.env.local`:
 
 ---
 
-## Project Structure
-
-```
-polymolt/
-├── backend/                  # FastAPI server (Python 3.11+)
-│   ├── main.py               # App entrypoint — mounts /ai, /db, /market routers
-│   ├── app/
-│   │   ├── ai/               # RAG pipeline, orchestrator, SSE streaming, bet sizing
-│   │   ├── agents/           # Agent definitions — persona, expertise, risk profiles
-│   │   ├── market/           # LMSR engine, market state, simulation
-│   │   ├── db/               # IBM Db2 persistence layer
-│   │   ├── models/           # OpenAI + Gemini wrappers (chat & embeddings)
-│   │   ├── data/             # Toronto open-data scrapers (TTC, parks, libraries)
-│   │   ├── config.py         # Environment variable loader
-│   │   └── cache.py          # Upstash Redis caching
-│   ├── Dockerfile            # Cloud Run deployment
-│   └── requirements.txt
-├── frontend/                 # Next.js 16 + React 19 + Tailwind CSS
-│   ├── app/                  # Pages: landing, dashboard, map, agents
-│   ├── components/           # UI: map, market panel, trade feed, globe
-│   ├── lib/                  # Hooks, context providers, utilities
-│   └── types/                # TypeScript type definitions
-└── docs/                     # Design docs, diagrams, task breakdowns
-```
-
----
-
 ## Future Roadmap
 
 - More agents with environmental, legal, and education expertise
@@ -187,9 +167,3 @@ polymolt/
 | Sihao Wu |
 | Ethan Yang |
 
----
-
-## Links
-
-- **Try it here**: https://polymolt.vercel.app/
-- **Devpost**: https://devpost.com/software/polymolt
