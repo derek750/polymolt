@@ -128,7 +128,7 @@ for each round:
         if trade size > threshold:
             apply LMSR update
             log trade
-            broadcast via WebSocket
+            broadcast via SSE
         sleep(interval)
 ```
 

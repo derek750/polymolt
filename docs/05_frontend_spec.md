@@ -5,7 +5,7 @@
 - TypeScript
 - Tailwind CSS
 - Recharts (for probability chart)
-- WebSocket (native browser API via custom hook)
+- Server-Sent Events (SSE) via EventSource in custom hook
 
 ---
 
@@ -70,7 +70,7 @@ components/
 ## Data Flow
 
 ```
-WebSocket (ws://localhost:8000/ws/{region_id})
+SSE (GET http://localhost:8000/market/{region_id}/stream)
   ↓
 useMarket() hook (lib/useMarket.ts)
   ↓
@@ -83,11 +83,11 @@ Components consume from context or props
 
 ---
 
-## WebSocket Message Types
+## SSE Event Types
 
 ```typescript
-// Incoming from backend
-type WSMessage =
+// Incoming from backend (SSE data payloads)
+type SSEMessage =
   | { type: "market_update"; data: MarketUpdate }
   | { type: "trade"; data: TradeEntry }
   | { type: "agent_update"; data: AgentUpdate }
