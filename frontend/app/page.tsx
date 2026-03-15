@@ -218,7 +218,7 @@ export default function HeroPage() {
         aria-hidden
       />
 
-      <div className="relative z-10 flex flex-col items-center gap-4 px-6">
+      <div className="relative z-10 flex flex-col items-center gap-4 px-6 -mt-32">
         <div className="flex items-center justify-center gap-4">
           <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 translate-x-2">
             {!logoError ? (
