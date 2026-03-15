@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useOrchestration } from "@/lib/useOrchestration"
+import { useOrchestration } from "@/lib/OrchestrationContext"
 import { Header } from "@/components/header/Header"
 import { MarketPanel } from "@/components/market/MarketPanel"
 import { TradeFeed } from "@/components/trades/TradeFeed"
+import { AgentReasoningDrawer } from "@/components/trades/AgentReasoningDrawer"
 import type { MarketState, Region } from "@/types/market"
 
 export default function DashboardPage() {
   const orch = useOrchestration()
   const [hasStarted, setHasStarted] = useState(false)
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
 
   // Read URL params on mount and auto-start orchestration
   useEffect(() => {
@@ -121,7 +123,7 @@ export default function DashboardPage() {
               <div className="h-full overflow-hidden">
                 <TradeFeed
                   trades={orch.trades}
-                  onAgentClick={() => window.location.href = "/agents"}
+                  onAgentClick={(agentId) => setSelectedAgentId(agentId)}
                 />
               </div>
             </div>
@@ -143,6 +145,14 @@ export default function DashboardPage() {
           </>
         )}
       </main>
+
+      {selectedAgentId && (
+        <AgentReasoningDrawer
+          agentId={selectedAgentId}
+          trades={orch.trades}
+          onClose={() => setSelectedAgentId(null)}
+        />
+      )}
     </div>
   )
 }

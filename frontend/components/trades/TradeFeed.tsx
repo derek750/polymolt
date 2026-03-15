@@ -76,7 +76,6 @@ export function TradeFeed({ trades, onAgentClick }: Props) {
                   key={trade.id}
                   trade={trade}
                   onAgentClick={(id) => {
-                    setExpanded(false)
                     onAgentClick?.(id)
                   }}
                 />
