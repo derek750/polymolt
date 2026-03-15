@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { X } from "lucide-react"
 import type { SelectedFeature } from "@/types/map"
 import type { HistoryItem } from "@/types/map"
-import { askLocation, getLocationHistory } from "@/lib/locationApi"
+import { getLocationHistory } from "@/lib/locationApi"
 
 interface LocationSidePanelProps {
   feature: SelectedFeature
@@ -18,7 +18,6 @@ export function LocationSidePanel({ feature, onClose, isMobile }: LocationSidePa
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [input, setInput] = useState("")
-  const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -32,32 +31,17 @@ export function LocationSidePanel({ feature, onClose, isMobile }: LocationSidePa
       .finally(() => setLoadingHistory(false))
   }, [feature.name, feature.coordinates?.join(",")])
 
-  const sendMessage = async () => {
+  const sendMessage = () => {
     const q = input.trim()
-    if (!q || sending) return
-    setInput("")
-    setSending(true)
-    setError(null)
-    try {
-      const res = await askLocation({
-        locationName: feature.name,
-        locationType: feature.type,
-        coordinates: feature.coordinates,
-        question: q,
-      })
-      const answer = (res as { answer?: string }).answer ?? "No response."
-      setHistory((prev) => [
-        ...prev,
-        { id: `h-${Date.now()}`, question: q, answer, createdAt: new Date().toISOString() },
-      ])
-      router.push("/dashboard")
-      onClose()
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : "Request failed"
-      setError(errMsg)
-    } finally {
-      setSending(false)
-    }
+    if (!q) return
+
+    // Navigate to dashboard with question params; orchestration runs there
+    const params = new URLSearchParams({
+      question: q,
+      location: feature.name,
+    })
+    router.push(`/dashboard?${params.toString()}`)
+    onClose()
   }
 
   const askAgain = (question: string) => {
@@ -122,10 +106,10 @@ export function LocationSidePanel({ feature, onClose, isMobile }: LocationSidePa
               <button
                 type="button"
                 onClick={sendMessage}
-                disabled={!input.trim() || sending}
+                disabled={!input.trim()}
                 className="px-4 py-2.5 rounded-xl bg-neutral-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-800 transition-colors"
               >
-                {sending ? "…" : "Ask"}
+                Ask
               </button>
             </div>
             {error && (
