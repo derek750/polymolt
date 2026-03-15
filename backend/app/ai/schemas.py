@@ -72,28 +72,31 @@ class TriggeredAgent(BaseModel):
     analysis: str
 
 
-class OrchestratorResponse(OrchestratorPhase1Response):
-    topic_reasoning: str
+class OrchestratorResponse(Phase1Response):
+    """Full orchestrated response (phase1 + phase2): topic_reasoning, triggered_agents, legacy summary."""
+    topic_reasoning: str = ""
     triggered_agents: list[TriggeredAgent] = []
-    # Legacy fields (kept for safety or final summary)
     assigned_agent_id: str | None = None
     assigned_agent_name: str | None = None
     expertise_rationale: str | None = None
     deep_analysis: str | None = None
 
 
-class OrchestratorPhase2Request(OrchestratorPhase1Response):
-    question_prompt: str = "[Placeholder: question prompt for the prediction market]"
+class Phase2Request(Phase1Response):
+    """Request body for POST /phase2: phase1 result plus optional question_prompt and model."""
+    question_prompt: str | None = None
     model: str | None = None
 
 
 class Phase2Response(Phase1Response):
-    assigned_agent_id: str
-    assigned_agent_name: str
-    expertise_rationale: str
+    topic_reasoning: str = ""
+    triggered_agents: list[TriggeredAgent] = []
+    assigned_agent_id: str = ""
+    assigned_agent_name: str = ""
+    expertise_rationale: str = ""
     relevant_agents_with_rag: list[AgentRagAssignment] = []
-    second_bets: list[AgentBet] = []  # relevant agents' second bet after orchestrator assignment
-    deep_analysis: str
+    second_bets: list[AgentBet] = []  # derived from triggered_agents for compatibility
+    deep_analysis: str = ""
 
 
 # ── RAG Ingestion ──

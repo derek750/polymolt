@@ -347,6 +347,7 @@ def _run_deep_analysis(
     context: str,
     model: str | None,
 ) -> tuple[str, int, str]:
+    """Returns (answer, confidence, analysis_text)."""
     agent = get_agent(agent_id) or AGENTS[0]
 
     other_bets = "\n".join(
@@ -364,15 +365,15 @@ def _run_deep_analysis(
         web_snippets=snippets_text,
         context_block=ctx,
     )
-    analysis = generate(user, system_prompt=system, model=agent.model or model, max_tokens=1024)
-
-    # Add visual RAG indicator
+    raw = generate(user, system_prompt=system, model=agent.model or model, max_tokens=1024)
+    answer, confidence, clean_analysis = _parse_agent_analysis(raw)
+    # Add visual RAG indicator to analysis text
     if context:
         header = "🟢 [ORCHESTRATOR: RAG CONTEXT ACTIVE]\n" + "="*40 + "\n"
     else:
         header = "🔴 [ORCHESTRATOR: NO RAG CONTEXT FOUND]\n" + "="*40 + "\n"
-    
-    return f"{header}{analysis}"
+    analysis = f"{header}{clean_analysis}"
+    return answer, confidence, analysis
 
 
 def _run_single_agent_second_bet(
@@ -496,33 +497,66 @@ def run_orchestrated_phase2(
         model=model,
     )
 
-    # Relevant agents each make a second bet with their assigned RAG context.
-    second_bets: list[dict[str, Any]] = []
-    for aid, ctx in agent_rag_map.items():
-        bet = _run_single_agent_second_bet(aid, question, ctx, model)
-        second_bets.append(bet)
+    _debug_log(f"Phase 2 processing: {len(relevant_agents_info)} relevant agents found.")
+    triggered_agents: list[dict[str, Any]] = []
+    for i, info in enumerate(relevant_agents_info):
+        aid = info.get("agent_id")
+        _debug_log(f"Triggering agent {i+1}/{len(relevant_agents_info)}: {aid}")
+        reasoning = info.get("choice_reasoning", "")
+        agent_specific_rag = info.get("rag_context_for_agent", "") or rag_context
 
-    analysis = _run_deep_analysis(
-        question=question,
-        agent_id=assigned_id,
-        bets=bets,
-        web_snippets=web_snippets,
-        context=agent_specific_rag,
-        model=model,
-    )
+        agent_obj = get_agent(aid) or AGENTS[0]
 
-    relevant_agents = [
-        {"agent_id": aid, "rag_context_for_agent": ctx}
-        for aid, ctx in agent_rag_map.items()
+        ans, conf, analysis = _run_deep_analysis(
+            question=question,
+            agent_id=agent_obj.id,
+            bets=bets,
+            web_snippets=web_snippets,
+            context=agent_specific_rag,
+            model=model,
+        )
+
+        triggered_agents.append({
+            "agent_id": agent_obj.id,
+            "agent_name": agent_obj.name,
+            "choice_reasoning": reasoning,
+            "context": agent_specific_rag,
+            "answer": ans,
+            "confidence": conf,
+            "analysis": analysis,
+        })
+
+    # Legacy / Phase2Response: primary = first triggered agent
+    primary = triggered_agents[0] if triggered_agents else {
+        "agent_id": "none", "agent_name": "None", "choice_reasoning": "None",
+        "context": "", "answer": "UNKNOWN", "confidence": 0, "analysis": "No agents triggered.",
+    }
+
+    # Phase2Response also expects relevant_agents_with_rag and second_bets
+    relevant_agents_with_rag = [
+        {"agent_id": t["agent_id"], "rag_context_for_agent": t["context"]}
+        for t in triggered_agents
+    ]
+    second_bets = [
+        {
+            "agent_id": t["agent_id"],
+            "agent_name": t["agent_name"],
+            "answer": t["answer"],
+            "confidence": t["confidence"],
+            "reasoning": t["analysis"],
+        }
+        for t in triggered_agents
     ]
 
     return {
-        "assigned_agent_id": assigned_agent.id,
-        "assigned_agent_name": assigned_agent.name,
-        "expertise_rationale": rationale,
-        "relevant_agents_with_rag": relevant_agents,
+        "topic_reasoning": topic_reasoning,
+        "triggered_agents": triggered_agents,
+        "assigned_agent_id": primary["agent_id"],
+        "assigned_agent_name": primary["agent_name"],
+        "expertise_rationale": primary["choice_reasoning"],
+        "relevant_agents_with_rag": relevant_agents_with_rag,
         "second_bets": second_bets,
-        "deep_analysis": analysis,
+        "deep_analysis": primary["analysis"],
     }
 
 
@@ -544,7 +578,7 @@ def run_phase2_stream(
     chunks = rag_chunks if rag_chunks is not None else ([s for s in rag_context.split("\n\n") if s.strip()] if rag_context else [])
     q_prompt = question_prompt or QUESTION_PROMPT_PLACEHOLDER
 
-    assigned_id, rationale, agent_rag_map = _identify_expertise_and_assign_rag(
+    topic_reasoning, relevant_agents_info = _identify_expertise_and_assign_rag(
         question=question,
         question_prompt=q_prompt,
         rag_chunks=chunks,
@@ -552,14 +586,21 @@ def run_phase2_stream(
         web_snippets=web_snippets,
         model=model,
     )
-    assigned_agent = get_agent(assigned_id) or AGENTS[0]
+    # Derive single-assigned shape for stream events (first relevant agent)
+    assigned_id = relevant_agents_info[0]["agent_id"] if relevant_agents_info else (AGENTS[0].id if AGENTS else "")
+    rationale = relevant_agents_info[0].get("choice_reasoning", "") if relevant_agents_info else ""
+    agent_rag_map = {r["agent_id"]: r.get("rag_context_for_agent", "") for r in relevant_agents_info}
+    assigned_agent = get_agent(assigned_id) or (AGENTS[0] if AGENTS else None)
+    if not assigned_agent:
+        raise ValueError("No agents configured")
     relevant_agents_with_rag = [
-        {"agent_id": aid, "rag_context_for_agent": ctx}
-        for aid, ctx in agent_rag_map.items()
+        {"agent_id": r["agent_id"], "rag_context_for_agent": r.get("rag_context_for_agent", "")}
+        for r in relevant_agents_info
     ]
 
     yield {
         "event": "orchestrator_done",
+        "topic_reasoning": topic_reasoning,
         "assigned_agent_id": assigned_agent.id,
         "assigned_agent_name": assigned_agent.name,
         "expertise_rationale": rationale,
@@ -585,7 +626,7 @@ def run_phase2_stream(
                 yield {"event": "agent_second_bet_done", "bet": bet}
 
     agent_specific_rag = agent_rag_map.get(assigned_id) or rag_context
-    analysis = _run_deep_analysis(
+    _ans, _conf, analysis = _run_deep_analysis(
         question=question,
         agent_id=assigned_id,
         bets=initial_bets,
@@ -596,6 +637,7 @@ def run_phase2_stream(
     yield {"event": "deep_analysis_done", "deep_analysis": analysis}
 
     result = {
+        "topic_reasoning": topic_reasoning,
         "assigned_agent_id": assigned_agent.id,
         "assigned_agent_name": assigned_agent.name,
         "expertise_rationale": rationale,
