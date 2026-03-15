@@ -91,8 +91,8 @@ def contextrun(request: ContextRunRequest):
 @router.post("/phase1", response_model=Phase1Response)
 def phase1(request: Phase1Request):
     """
-    Phase 1: RAG + all agents place initial bet (internal bet prompt) + web scrape.
-    Returns initial_bets + rag_context for phase2.
+    Phase 1: All agents place initial bet. Returns question + initial_bets.
+    Phase 2 fetches its own RAG when invoked.
     """
     result = run_orchestrated_initial(
         question=request.question,
@@ -131,9 +131,6 @@ def phase2(request: Phase2Request):
     phase2_result = run_orchestrated_phase2(
         question=request.question,
         initial_bets=bets,
-        web_scrape_snippets=request.web_scrape_snippets,
-        rag_context=request.rag_context,
-        rag_chunks=request.rag_chunks or None,
         question_prompt=request.question_prompt or None,
         model=request.model,
     )
@@ -141,9 +138,6 @@ def phase2(request: Phase2Request):
     return Phase2Response(
         question=request.question,
         initial_bets=request.initial_bets,
-        web_scrape_snippets=request.web_scrape_snippets,
-        rag_context=request.rag_context,
-        rag_chunks=request.rag_chunks,
         **phase2_result,
     )
 

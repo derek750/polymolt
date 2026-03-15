@@ -27,9 +27,6 @@ def phase2_sse_generator(request: Phase2Request) -> Iterator[str]:
     for payload in run_phase2_stream(
         question=request.question,
         initial_bets=bets,
-        web_scrape_snippets=request.web_scrape_snippets,
-        rag_context=request.rag_context,
-        rag_chunks=request.rag_chunks or None,
         question_prompt=request.question_prompt or None,
         model=request.model,
     ):

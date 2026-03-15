@@ -79,23 +79,18 @@ class Phase1Request(BaseModel):
 class Phase1Response(BaseModel):
     question: str
     initial_bets: list[AgentBet]
-    web_scrape_snippets: list[str]
-    rag_context: str
-    rag_chunks: list[str] = []
 
 
 class AgentRagAssignment(BaseModel):
     agent_id: str
     agent_name: str
     expertise_rationale: str  # why this agent was chosen (no "primary" agent; all are equal)
-    rag_context_for_agent: str
 
 
 class TriggeredAgent(BaseModel):
     agent_id: str
     agent_name: str
     choice_reasoning: str
-    context: str
     answer: str
     confidence: int
     analysis: str
@@ -104,6 +99,7 @@ class TriggeredAgent(BaseModel):
 class OrchestratorResponse(Phase1Response):
     """Full orchestrated response (phase1 + phase2): triggered_agents (all chosen, none primary), second_bets."""
     topic_reasoning: str = ""
+    context_for_agents: str = ""  # single shared context for all triggered agents (from Phase 2 RAG)
     triggered_agents: list[TriggeredAgent] = []
     relevant_agents_with_rag: list[AgentRagAssignment] = []
     second_bets: list[AgentBet] = []
@@ -117,6 +113,7 @@ class Phase2Request(Phase1Response):
 
 class Phase2Response(Phase1Response):
     topic_reasoning: str = ""
+    context_for_agents: str = ""  # single shared context for all triggered agents
     triggered_agents: list[TriggeredAgent] = []
     relevant_agents_with_rag: list[AgentRagAssignment] = []
     second_bets: list[AgentBet] = []
