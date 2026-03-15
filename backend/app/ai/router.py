@@ -169,7 +169,7 @@ def orchestrate(request: OrchestrateRequest):
     Full orchestrated pipeline in one call:
     1. All agents place an initial bet (phase1, no year filtering).
     2. Orchestrator identifies expertise, assigns agent(s), runs deep analysis (phase2, year-filtered).
-    Saves the full response (question, initial_bets, triggered_agents, deep_analysis, etc.) to Db2.
+    Saves the full response (question, initial_bets, triggered_agents, deep_analysis, etc.) to Supabase.
     """
     result = run_orchestrated_pipeline(
         question=request.question,

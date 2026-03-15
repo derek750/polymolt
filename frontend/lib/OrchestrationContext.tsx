@@ -59,6 +59,7 @@ export function OrchestrationProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<OrchestrationState>(INITIAL_STATE)
   const abortRef = useRef<AbortController | null>(null)
   const tradeIdRef = useRef(0)
+  const allTradesRef = useRef<TradeEntry[]>([]) // Track trades outside React state for DB save
 
   // Place a YES/NO order on the LMSR market and return price before/after
   async function placeOrder(
@@ -106,6 +107,8 @@ export function OrchestrationProvider({ children }: { children: ReactNode }) {
       reasoning: `[${label}] ${bet.reasoning}`.slice(0, 300),
       evidenceTitles: [],
     }
+
+    allTradesRef.current.push(trade) // Track for DB save
 
     setState((prev) => ({
       ...prev,
@@ -172,6 +175,7 @@ export function OrchestrationProvider({ children }: { children: ReactNode }) {
       const ac = new AbortController()
       abortRef.current = ac
       tradeIdRef.current = 0
+      allTradesRef.current = []
 
       setState({
         ...INITIAL_STATE,
@@ -282,6 +286,39 @@ export function OrchestrationProvider({ children }: { children: ReactNode }) {
           status: "done",
           phaseLabel: `Analysis complete across ${YEARS.length} years.`,
         }))
+
+        // Save question and all trades to Supabase
+        try {
+          const trades = allTradesRef.current
+          const stakeholders = trades.map((trade) => ({
+            stakeholder_id: trade.agentId,
+            stakeholder_role: trade.agentName,
+            ai_agent_id: trade.agentId,
+            answer: (trade.direction === "YES" ? "yes" : "no") as "yes" | "no",
+            confidence: Math.min(1.0, trade.size / 20),
+            reasoning: trade.reasoning,
+            raw_payload: null,
+          }))
+
+          if (stakeholders.length > 0) {
+            const saveRes = await fetch(`${BACKEND}/db/questions`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                question,
+                location,
+                stakeholders,
+              }),
+            })
+            if (!saveRes.ok) {
+              console.warn("Supabase save returned", saveRes.status, await saveRes.text().catch(() => ""))
+            }
+          } else {
+            console.warn("No trades to save")
+          }
+        } catch (e) {
+          console.warn("Failed to save question to Supabase:", e)
+        }
       } catch (e) {
         if (ac.signal.aborted) return
         setState((prev) => ({

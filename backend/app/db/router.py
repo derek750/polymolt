@@ -35,19 +35,40 @@ router = APIRouter(prefix="/db", tags=["database"])
 @router.get("/health")
 def db_health():
     """
-    Lightweight health check for the Db2 integration.
-
-    This does NOT open a real Db2 connection; it only indicates that the
-    API is wired up. Use a real Db2 monitoring tool or a dedicated route
-    if you need a deeper check.
+    Health check for the Supabase integration. Tests actual connection.
     """
-    return {"status": "ok", "message": "Db2 integration ready (connection tested on write)."}
+    import os
+
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url or not key:
+        return {
+            "status": "error",
+            "message": "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set.",
+            "available": False,
+        }
+
+    try:
+        from app.db.supabase import get_supabase
+        sb = get_supabase()
+        sb.table("questions").select("id").limit(1).execute()
+        return {
+            "status": "ok",
+            "message": "Supabase connection successful",
+            "available": True,
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "message": f"Supabase connection failed: {str(exc)}",
+            "available": False,
+        }
 
 
 @router.post("/questions", response_model=SaveQuestionResponse)
 def save_question(request: SaveQuestionRequest) -> SaveQuestionResponse:
     """
-    Save a question and all stakeholder AI perspectives to IBM Db2.
+    Save a question and all stakeholder AI perspectives to Supabase.
 
     Call this from your question pipeline once you have:
       - the final location label
@@ -73,8 +94,11 @@ def save_question(request: SaveQuestionRequest) -> SaveQuestionResponse:
             location=request.location,
             perspectives=perspectives,
         )
-    except Exception as exc:  # broad but translated to HTTP error for the API client
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to save question to Supabase: {exc}")
+        return SaveQuestionResponse(question_id=-1)
 
     return SaveQuestionResponse(question_id=question_id)
 
@@ -102,11 +126,16 @@ def create_question_basic(request: CreateQuestionOnlyRequest) -> SaveQuestionRes
 def list_questions(limit: int = 50) -> QuestionListResponse:
     """
     List recent questions with simple yes/no counts.
+
+    Returns empty list if Supabase is unavailable (graceful degradation).
     """
     try:
         rows = list_recent_questions(limit=limit)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Supabase unavailable, returning empty list: {exc}")
+        return QuestionListResponse(questions=[])
 
     questions = [
         QuestionSummaryOut(
@@ -132,9 +161,11 @@ def get_question(question_id: int) -> QuestionDetailResponse:
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Supabase unavailable for question {question_id}: {exc}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(exc)}") from exc
 
-    # Compute aggregated counts to reuse QuestionSummaryOut
     yes_count = sum(1 for r in resp_rows if r.answer.upper() == "YES")
     no_count = sum(1 for r in resp_rows if r.answer.upper() == "NO")
 
@@ -198,4 +229,3 @@ def get_question_orchestrate(question_id: int) -> OrchestrateRunOut:
         full_response=full,
         created_at=row.created_at or "",
     )
-

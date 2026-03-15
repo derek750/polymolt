@@ -1,4 +1,4 @@
-"""Database layer — IBM Db2 persistence for questions and stakeholder perspectives."""
+"""Database layer — Supabase persistence for questions and stakeholder perspectives."""
 
 from app.db.router import router
 

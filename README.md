@@ -27,6 +27,7 @@ Polymolt combines RAG pipelines, LMSR market mechanics, and multi-agent orchestr
 - **Multi-agent orchestration** routing questions to the most relevant domain specialists
 - **Dynamic visualization** via interactive globe, animated stock lines, and live charts
 - **Shock events**: inject crisis or recovery scenarios mid-simulation; agents react within rounds
+- **Railtracks**
 
 ---
 
@@ -190,4 +191,5 @@ polymolt/
 
 ## Links
 
-- **Devpost**: coming soon
+- **Try it here**: https://polymolt.vercel.app/
+- **Devpost**: https://devpost.com/software/polymolt

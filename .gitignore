@@ -4,6 +4,7 @@ node_modules
 __pycache__
 
 .env
+.env.local
 
 .ipynb_checkpoints
 backend/chroma_db

@@ -191,7 +191,7 @@ export function QuestionMenu({ open, onClose }: Props) {
             />
           </div>
           <p className="text-[11px] text-neutral-400">
-            Creating a question stores it in IBM Db2. Your stakeholder AI pipeline can attach
+            Creating a question stores it in Supabase. Your stakeholder AI pipeline can attach
             yes/no perspectives to this question later.
           </p>
         </div>
@@ -316,7 +316,7 @@ export function QuestionMenu({ open, onClose }: Props) {
                   {detail.responses.length === 0 ? (
                     <div className="text-[11px] text-neutral-400">
                       No stakeholder responses stored yet. Your AI pipeline can attach them to this
-                      question in Db2.
+                      question in the database.
                     </div>
                   ) : (
                     <div className="flex-1 overflow-y-auto space-y-2">
