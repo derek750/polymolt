@@ -13,6 +13,7 @@ def phase1_sse_generator(request: Phase1Request) -> Iterator[str]:
     """Yield SSE-formatted lines for phase1 stream."""
     for payload in run_phase1_stream(
         question=request.question,
+        location=request.location,
         use_rag=request.use_rag,
         model=request.model,
     ):

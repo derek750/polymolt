@@ -50,6 +50,15 @@ def _normalize_answer(answer: str) -> str:
     return "NO"
 
 
+def _question_with_location(question: str, location: str | None) -> str:
+    """If location is provided, append ' in {location}' to the question (e.g. 'Is this hospital good' -> 'Is this hospital good in Toronto')."""
+    if not (location and location.strip()):
+        return question
+    loc = location.strip()
+    q = (question or "").strip().rstrip(".?")
+    return f"{q} in {loc}" if q else question
+
+
 # ── Phase 1: Initial bets ───────────────────────────────────────────────
 
 _BET_SYSTEM = "You are {agent_name}. {system_prompt}"
@@ -166,6 +175,7 @@ def _run_phase1_via_pipeline(
 
 def run_phase1_stream(
     question: str,
+    location: str | None = None,
     use_rag: bool = True,
     model: str | None = None,
 ) -> Iterator[dict[str, Any]]:
@@ -174,11 +184,12 @@ def run_phase1_stream(
     then a final phase1_complete event with the full result.
     Events: {"event": "agent_done", "bet": {...}} and {"event": "phase1_complete", "result": Phase1Response dict}.
     """
-    q_emb = embed_text(question)
+    effective_question = _question_with_location(question, location)
+    q_emb = embed_text(effective_question)
     bets: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=len(AGENTS)) as executor:
         future_to_agent = {
-            executor.submit(_run_single_agent_bet, agent, question, use_rag, model, q_emb): agent
+            executor.submit(_run_single_agent_bet, agent, effective_question, use_rag, model, q_emb): agent
             for agent in AGENTS
         }
         for future in as_completed(future_to_agent):
@@ -187,7 +198,8 @@ def run_phase1_stream(
             yield {"event": "agent_done", "bet": bet}
 
     result = {
-        "question": question,
+        "question": effective_question,
+        "location": location,
         "initial_bets": bets,
     }
     yield {"event": "phase1_complete", "result": result}
@@ -374,6 +386,7 @@ def _run_single_agent_second_bet(
 
 def run_orchestrated_initial(
     question: str,
+    location: str | None = None,
     use_rag: bool = True,
     model: str | None = None,
     where_filter: dict | None = None,
@@ -382,22 +395,25 @@ def run_orchestrated_initial(
     Phase 1 (legacy): RAG + internal bet prompt per agent. No web scraping.
     Use run_phase1 for "same as /run per agent".
     """
+    effective_question = _question_with_location(question, location)
     if use_rag:
-        rag_chunks = retrieve_chunks(question, top_k=4, collection_name="news_rag", where_filter=where_filter)
+        rag_chunks = retrieve_chunks(effective_question, top_k=4, collection_name="news_rag", where_filter=where_filter)
         context = "\n\n".join(rag_chunks) if rag_chunks else ""
     else:
         rag_chunks = []
         context = ""
-    bets = _run_all_bets(question, context, model)
+    bets = _run_all_bets(effective_question, context, model)
 
     return {
-        "question": question,
+        "question": effective_question,
+        "location": location,
         "initial_bets": bets,
     }
 
 
 def run_phase1(
     question: str,
+    location: str | None = None,
     use_rag: bool = True,
     model: str | None = None,
     where_filter: dict | None = None,
@@ -407,9 +423,11 @@ def run_phase1(
     For each agent, run the same pipeline as POST /run; collect responses as initial_bets.
     Phase 2 fetches its own RAG when invoked.
     """
-    bets = _run_phase1_via_pipeline(question, use_rag=use_rag, model=model)
+    effective_question = _question_with_location(question, location)
+    bets = _run_phase1_via_pipeline(effective_question, use_rag=use_rag, model=model)
     return {
-        "question": question,
+        "question": effective_question,
+        "location": location,
         "initial_bets": bets,
     }
 
@@ -560,6 +578,7 @@ def run_phase2_stream(
 
 def run_orchestrated_pipeline(
     question: str,
+    location: str | None = None,
     use_rag: bool = True,
     model: str | None = None,
     where_filter: dict | None = None,
@@ -570,14 +589,15 @@ def run_orchestrated_pipeline(
     2. Orchestrator identifies expertise, assigns RAG to relevant agents,
        and each runs a second bet via the pipeline.
     """
-    _debug_log(f"Starting pipeline for question: {question}")
+    effective_question = _question_with_location(question, location)
+    _debug_log(f"Starting pipeline for question: {effective_question}")
     # Phase 1 — initial bets
-    phase1 = run_orchestrated_initial(question=question, use_rag=use_rag, model=model, where_filter=where_filter)
+    phase1 = run_orchestrated_initial(question=question, location=location, use_rag=use_rag, model=model, where_filter=where_filter)
     _debug_log("Phase 1 complete.")
 
     # Phase 2 — fetches its own RAG; expertise selection + context assignment + second bets
     phase2 = run_orchestrated_phase2(
-        question=question,
+        question=phase1["question"],
         initial_bets=phase1["initial_bets"],
         question_prompt=QUESTION_PROMPT_PLACEHOLDER,
         model=model,

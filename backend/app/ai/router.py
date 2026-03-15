@@ -96,6 +96,7 @@ def phase1(request: Phase1Request):
     """
     result = run_orchestrated_initial(
         question=request.question,
+        location=request.location,
         use_rag=request.use_rag,
         model=request.model,
         where_filter=request.where_filter,
@@ -137,6 +138,7 @@ def phase2(request: Phase2Request):
 
     return Phase2Response(
         question=request.question,
+        location=request.location,
         initial_bets=request.initial_bets,
         **phase2_result,
     )
@@ -168,6 +170,7 @@ def orchestrate(request: Phase1Request):
     """
     result = run_orchestrated_pipeline(
         question=request.question,
+        location=request.location,
         use_rag=request.use_rag,
         model=request.model,
         where_filter=request.where_filter,

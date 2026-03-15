@@ -71,6 +71,7 @@ class AgentBet(BaseModel):
 
 class Phase1Request(BaseModel):
     question: str
+    location: str | None = None  # e.g. "Toronto" -> question becomes "... in Toronto"
     use_rag: bool = True
     model: str | None = None
     where_filter: dict | None = None
@@ -78,6 +79,7 @@ class Phase1Request(BaseModel):
 
 class Phase1Response(BaseModel):
     question: str
+    location: str | None = None
     initial_bets: list[AgentBet]
 
 
