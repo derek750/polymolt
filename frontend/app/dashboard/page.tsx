@@ -1,24 +1,19 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useMarket } from "@/lib/useMarket"
 import { Header } from "@/components/header/Header"
 import { MarketPanel } from "@/components/market/MarketPanel"
-import { BehaviorStudyView } from "@/components/market/BehaviorStudyView"
 import { TradeFeed } from "@/components/trades/TradeFeed"
-import { AgentGrid } from "@/components/agents/AgentGrid"
-import { AgentDrawer } from "@/components/agents/AgentDrawer"
 import { RegionNews } from "@/components/region/RegionNews"
 import { Region } from "@/types/market"
 import { QuestionMenu } from "@/components/questions/QuestionMenu"
 
 export default function DashboardPage() {
   const { market, agents, trades, regions, selectedRegion, connectionStatus, selectRegion, resetMarket, shockMarket } = useMarket("scandinavia")
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
-  const [showStudyView, setShowStudyView] = useState(false)
   const [showQuestions, setShowQuestions] = useState(false)
 
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null
   const currentRegion = (regions.find((r) => r.id === selectedRegion) ?? null) as Region | null
 
   return (
@@ -33,30 +28,28 @@ export default function DashboardPage() {
       />
 
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-5 max-w-[1400px] mx-auto w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <div className="flex flex-col gap-4">
-            <MarketPanel market={market} region={currentRegion} trades={trades} />
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-stretch">
+          <div className="flex flex-col gap-4 min-h-0">
+            <div className="flex-1 min-h-0">
+              <MarketPanel market={market} region={currentRegion} trades={trades} />
+            </div>
             <RegionNews region={currentRegion} />
           </div>
-          <div className="h-[560px]">
+          <div className="min-h-[560px] h-full">
             <TradeFeed
               trades={trades}
-              onAgentClick={(id) => setSelectedAgentId(id)}
+              onAgentClick={(id) => window.location.href = `/agents`}
             />
           </div>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={() => setShowStudyView((v) => !v)}
-            className={`px-3 py-1.5 rounded border text-xs transition-colors ${
-              showStudyView
-                ? "bg-neutral-900 border-neutral-900 text-white"
-                : "bg-white border-neutral-200 text-neutral-500 hover:border-neutral-400"
-            }`}
+          <Link
+            href="/agents"
+            className="px-3 py-1.5 rounded border text-xs transition-colors bg-white border-neutral-200 text-neutral-500 hover:border-neutral-400"
           >
-            {showStudyView ? "Hide" : "Show"} Beliefs
-          </button>
+            View Agents ({agents.length})
+          </Link>
 
           {market?.isRunning && (
             <div className="flex items-center gap-2 ml-auto">
@@ -75,34 +68,7 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-
-        {showStudyView && market && agents.length > 0 && (
-          <BehaviorStudyView
-            agents={agents}
-            marketPrice={market.currentPrice}
-            onAgentClick={(id) => setSelectedAgentId(id)}
-          />
-        )}
-
-        <AgentGrid
-          agents={agents}
-          onAgentClick={(id) => setSelectedAgentId(id)}
-        />
       </main>
-
-      {selectedAgentId && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/20"
-            onClick={() => setSelectedAgentId(null)}
-          />
-          <AgentDrawer
-            agent={selectedAgent}
-            marketPrice={market?.currentPrice}
-            onClose={() => setSelectedAgentId(null)}
-          />
-        </>
-      )}
 
       <QuestionMenu
         open={showQuestions}
