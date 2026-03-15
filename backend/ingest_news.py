@@ -1,46 +1,54 @@
+import os
 import requests
-import json
+import pandas as pd
 
-# Configuration
 API_URL = "http://localhost:8000/ai/ingest"
+PARQUET_PATH = os.path.join(os.path.dirname(__file__), "app", "data", "hospital_data.parquet")
+BATCH_SIZE = 50
+COLLECTION_NAME = "news_rag"
 
-# Sample dummy news and reports about Toronto locations
-NEWS_SAMPLES = [
-    {
-        "texts": [
-            "Toronto General Hospital announces a major funding boost intended to reduce ER wait times below the 2-hour mark by the end of the year.",
-            "Recent patient surveys indicate a 15% drop in satisfaction at downtown Toronto hospitals due to staffing shortages during peak hours.",
-            "A new initiative at SickKids aims to expand its specialized nursery ward, increasing capacity by 50 beds."
-        ],
-        "ids": ["news_1_tgh_funding", "news_2_downtown_er", "news_3_sickkids_nursery"],
-        "metadatas": [
-            {"year": 2024, "location_type": "hospital", "target": "toronto_general"},
-            {"year": 2024, "location_type": "hospital", "target": "downtown_network"},
-            {"year": 2023, "location_type": "nursery", "target": "sickkids"}
-        ],
-        "collection_name": "news_rag"
-    },
-    {
-        "texts": [
-            "High Park officials predict record attendance for the cherry blossom festival this spring, citing favorable weather forecasts.",
-            "St. Lawrence Market vendors express concern over proposed construction that may limit weekend visitor access for the next 6 months.",
-            "The Royal Ontario Museum (ROM) reports a 20% increase in annual memberships following the successful launch of their new interactive dinosaur exhibit."
-        ],
-        "ids": ["news_4_highpark", "news_5_stlawrence", "news_6_rom_exhibit"],
-        "metadatas": [
-            {"year": 2024, "location_type": "attraction", "target": "high_park"},
-            {"year": 2024, "location_type": "attraction", "target": "st_lawrence_market"},
-            {"year": 2023, "location_type": "attraction", "target": "rom"}
-        ],
-        "collection_name": "rag"
-    }
-]
+
+def _load_articles() -> pd.DataFrame:
+    df = pd.read_parquet(PARQUET_PATH)
+    df = df.fillna("")
+    return df
+
+
+def _row_to_text(row) -> str:
+    title = row.get("title", "").strip()
+    body = row.get("body", "").strip()
+    if not body:
+        return title
+    if not title or title == body:
+        return body
+    return f"{title}\n{body}"
+
 
 def ingest_news():
+    df = _load_articles()
+    print(f"Loaded {len(df)} articles from {PARQUET_PATH}")
     print(f"Connecting to {API_URL} to ingest News Data...")
-    for entry in NEWS_SAMPLES:
+
+    texts = [_row_to_text(row) for _, row in df.iterrows()]
+    ids = [f"news_{i}" for i in range(len(texts))]
+    metadatas = [
+        {
+            "source": str(row.get("source", "")),
+            "date": str(row.get("date", "")),
+        }
+        for _, row in df.iterrows()
+    ]
+
+    for start in range(0, len(texts), BATCH_SIZE):
+        end = min(start + BATCH_SIZE, len(texts))
+        payload = {
+            "texts": texts[start:end],
+            "ids": ids[start:end],
+            "metadatas": metadatas[start:end],
+            "collection_name": COLLECTION_NAME,
+        }
         try:
-            response = requests.post(API_URL, json=entry)
+            response = requests.post(API_URL, json=payload)
             if response.status_code == 200:
                 print(f"Success: {response.json()['message']}")
             else:
@@ -48,6 +56,7 @@ def ingest_news():
         except requests.exceptions.ConnectionError:
             print("Error: Could not connect to the backend server. Make sure it's running at http://localhost:8000")
             break
+
 
 if __name__ == "__main__":
     ingest_news()

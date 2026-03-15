@@ -1,4 +1,8 @@
-"""OpenAI provider — chat completions and embeddings."""
+"""OpenAI provider — chat completions only.
+
+Embeddings are handled by the Gemini provider; the OpenAI-compatible
+proxy (HuggingFace Inference Endpoints) does not expose /embeddings.
+"""
 
 from __future__ import annotations
 
@@ -39,21 +43,3 @@ def generate(
     except Exception as e:
         logger.exception("OpenAI generate failed")
         return f"Error: {e!s}"
-
-
-def embed(text: str, model: str | None = None) -> list[float]:
-    """Return an embedding vector for *text*, or [] on failure."""
-    model = (model or EMBED_MODEL).strip()
-    if not OPENAI_API_KEY:
-        return []
-    try:
-        from openai import OpenAI
-        client = OpenAI(
-            api_key=OPENAI_API_KEY,
-            base_url=OPENAI_BASE_URL if OPENAI_BASE_URL else None
-        )
-        r = client.embeddings.create(input=[text], model=model)
-        return r.data[0].embedding
-    except Exception as e:
-        logger.warning("OpenAI embed failed: %s", e)
-        return []

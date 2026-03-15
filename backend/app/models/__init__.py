@@ -4,8 +4,11 @@ Centralized AI model access.
 Usage:
     from app.models import generate, embed
 
-generate() auto-routes to the correct provider based on the model name.
-embed() currently uses OpenAI only (Gemini embeddings can be added later).
+generate() defaults to OpenAI (or compatible proxy) unless the model name
+starts with "gemini", in which case it routes to the Gemini provider.
+
+embed() always uses Gemini — the OpenAI-compatible proxy (HuggingFace
+Inference Endpoints) does not expose an /embeddings route.
 """
 
 from __future__ import annotations
@@ -13,6 +16,8 @@ from __future__ import annotations
 from app.config import CHAT_MODEL, DEFAULT_MODEL_NO_TOKENS
 from app.models import openai as _openai
 from app.models import gemini as _gemini
+
+_log = logging.getLogger(__name__)
 
 
 def _is_gemini(model: str) -> bool:
@@ -39,40 +44,10 @@ def generate(
 
 
 def embed(text: str, model: str | None = None) -> list[float]:
-    """Return an embedding vector, routed by available key or model name.
+    """Return an embedding vector via Gemini."""
+    from app.config import GOOGLE_API_KEY
 
-    Falls back to the other provider if the primary one returns nothing.
-    """
-    import logging
-    from app.config import OPENAI_API_KEY, GOOGLE_API_KEY
-
-    _log = logging.getLogger(__name__)
-    resolved = (model or "").strip().lower()
-    errors: list[str] = []
-
-    if resolved.startswith("models/"):
-        return _gemini.embed(text, model=model)
-
-    if OPENAI_API_KEY:
-        try:
-            result = _openai.embed(text, model=model)
-            if result:
-                return result
-            errors.append("OpenAI embed returned empty result")
-        except Exception as e:
-            errors.append(f"OpenAI embed error: {e}")
-
-    if GOOGLE_API_KEY:
-        try:
-            result = _gemini.embed(text, model=None)
-            if result:
-                return result
-            errors.append("Gemini embed returned empty result")
-        except Exception as e:
-            errors.append(f"Gemini embed error: {e}")
-
-    if errors:
-        _log.warning("All embed providers failed: %s", "; ".join(errors))
-    else:
-        _log.warning("No API keys configured for embeddings")
-    return []
+    if not GOOGLE_API_KEY:
+        _log.warning("GOOGLE_API_KEY not set — cannot embed")
+        return []
+    return _gemini.embed(text, model=model)
