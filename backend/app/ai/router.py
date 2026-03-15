@@ -91,11 +91,12 @@ def contextrun(request: ContextRunRequest):
 @router.post("/phase1", response_model=Phase1Response)
 def phase1(request: Phase1Request):
     """
-    Phase 1: RAG + all agents place initial bet (internal bet prompt) + web scrape.
-    Returns initial_bets + rag_context for phase2.
+    Phase 1: All agents place initial bet. Returns question + initial_bets.
+    Phase 2 fetches its own RAG when invoked.
     """
     result = run_orchestrated_initial(
         question=request.question,
+        location=request.location,
         use_rag=request.use_rag,
         model=request.model,
         where_filter=request.where_filter,
@@ -131,19 +132,14 @@ def phase2(request: Phase2Request):
     phase2_result = run_orchestrated_phase2(
         question=request.question,
         initial_bets=bets,
-        web_scrape_snippets=request.web_scrape_snippets,
-        rag_context=request.rag_context,
-        rag_chunks=request.rag_chunks or None,
         question_prompt=request.question_prompt or None,
         model=request.model,
     )
 
     return Phase2Response(
         question=request.question,
+        location=request.location,
         initial_bets=request.initial_bets,
-        web_scrape_snippets=request.web_scrape_snippets,
-        rag_context=request.rag_context,
-        rag_chunks=request.rag_chunks,
         **phase2_result,
     )
 
@@ -152,7 +148,7 @@ def phase2(request: Phase2Request):
 def phase2_stream(request: Phase2Request):
     """
     Phase 2 as Server-Sent Events: orchestrator_done, then one agent_second_bet_done per
-    relevant agent (parallel), then deep_analysis_done, then phase2_complete with full result.
+    relevant agent (parallel), then phase2_complete with full result.
     """
     return StreamingResponse(
         phase2_sse_generator(request),
@@ -171,13 +167,25 @@ def orchestrate(request: Phase1Request):
     Full orchestrated pipeline in one call:
     1. All agents place an initial bet (phase1).
     2. Orchestrator web-scrapes, identifies expertise, assigns agent(s), runs deep analysis (phase2).
+    Saves the full response (question, initial_bets, triggered_agents, deep_analysis, etc.) to Db2.
     """
     result = run_orchestrated_pipeline(
         question=request.question,
+        location=request.location,
         use_rag=request.use_rag,
         model=request.model,
         where_filter=request.where_filter,
     )
+    try:
+        from app.db.db2 import save_orchestrate_response
+        save_orchestrate_response(
+            question=request.question,
+            location="",
+            response=result,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to save orchestrate response to Db2: %s", e)
     return Phase2Response(**result)
 
 

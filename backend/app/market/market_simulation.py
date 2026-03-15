@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from app.config import CHAT_MODEL, GOOGLE_API_KEY, OPENAI_API_KEY
+from app.config import CHAT_MODEL, DEFAULT_MODEL_NO_TOKENS, GOOGLE_API_KEY, OPENAI_API_KEY
 from app.ai.rag import retrieve, embed
 from app.ai.bet_sizing import get_bet_for_agent
 from app.agents.config import AgentConfig, AGENTS
@@ -24,11 +24,11 @@ def _is_gemini_model(model: str) -> bool:
 
 
 def _choose_model(agent: AgentConfig, model_override: Optional[str]) -> str:
-    if model_override:
+    if model_override and model_override.strip():
         return model_override.strip()
-    if agent.model:
-        return agent.model
-    return CHAT_MODEL
+    if agent.model and agent.model.strip():
+        return agent.model.strip()
+    return (CHAT_MODEL or DEFAULT_MODEL_NO_TOKENS).strip() or DEFAULT_MODEL_NO_TOKENS
 
 
 def _call_llm(prompt: str, model: str, max_tokens: int = 512) -> str:

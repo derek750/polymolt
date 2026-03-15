@@ -20,10 +20,6 @@ agent = AgentConfig(
         "When answering: "
         "1. Briefly explain your reasoning based on your perspective as a healthcare provider. "
         "2. Cite relevant evidence from the provided context when available. "
-        "You MUST end your reply with exactly one of these two lines (nothing after it): "
-        "Answer: Yes "
-        "Answer: No "
-        "Be empathetic, practical, and clinical. You must reply with yes or no."
     ),
     model="openai/gpt-oss-120b",
 )

@@ -13,6 +13,7 @@ from app.db.db2 import (
     QuestionSummary,
     create_question_only,
     get_question_with_responses,
+    get_orchestrate_run,
     list_recent_questions,
     save_question_with_perspectives,
 )
@@ -20,6 +21,7 @@ from app.db.schemas import (
     CreateQuestionOnlyRequest,
     QuestionDetailResponse,
     QuestionListResponse,
+    OrchestrateRunOut,
     QuestionSummaryOut,
     SaveQuestionRequest,
     SaveQuestionResponse,
@@ -149,6 +151,7 @@ def get_question(question_id: int) -> QuestionDetailResponse:
         StakeholderResponseOut(
             id=r.id,
             question_id=r.question_id,
+            phase=r.phase,
             stakeholder_id=r.stakeholder_id,
             stakeholder_role=r.stakeholder_role,
             ai_agent_id=r.ai_agent_id,
@@ -161,4 +164,35 @@ def get_question(question_id: int) -> QuestionDetailResponse:
     ]
 
     return QuestionDetailResponse(question=question, responses=responses)
+
+
+@router.get("/questions/{question_id}/orchestrate", response_model=OrchestrateRunOut)
+def get_question_orchestrate(question_id: int) -> OrchestrateRunOut:
+    """
+    Get the saved orchestrate run for a question (topic_reasoning, deep_analysis,
+    assigned_agent_id, full_response JSON, etc.).
+    """
+    import json as _json
+    try:
+        row = get_orchestrate_run(question_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if not row:
+        raise HTTPException(status_code=404, detail=f"No orchestrate run for question {question_id}")
+    full = None
+    if row.full_response:
+        try:
+            full = _json.loads(row.full_response)
+        except Exception:
+            full = None
+    return OrchestrateRunOut(
+        question_id=row.question_id,
+        topic_reasoning=row.topic_reasoning or "",
+        deep_analysis=row.deep_analysis or "",
+        assigned_agent_id=row.assigned_agent_id,
+        expertise_rationale=row.expertise_rationale,
+        rag_context=row.rag_context,
+        full_response=full,
+        created_at=row.created_at or "",
+    )
 

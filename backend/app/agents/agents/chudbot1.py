@@ -27,8 +27,5 @@ agent = AgentConfig(
         "2. Cite relevant evidence from the provided context when available. "
         "3. Give slightly greater importance to location or spatial information when forming your conclusion. "
         "You MUST end your reply with exactly one of these two lines (nothing after it): "
-        "Answer: Yes "
-        "Answer: No "
-        "Be concise, logical, and evidence-based. You must reply with yes or no."
     ),
 )

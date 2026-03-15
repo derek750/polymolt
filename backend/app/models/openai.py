@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from app.config import OPENAI_API_KEY, OPENAI_BASE_URL, CHAT_MODEL
+from app.config import OPENAI_API_KEY, OPENAI_BASE_URL, CHAT_MODEL, DEFAULT_MODEL_NO_TOKENS, EMBED_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +19,10 @@ def generate(
     system_prompt: str | None = None,
     model: str | None = None,
     max_tokens: int = 1024,
+    json_mode: bool = False,
 ) -> str:
     """Call OpenAI chat completions with proper system/user roles."""
-    model = (model or CHAT_MODEL).strip()
+    model = (model or CHAT_MODEL or DEFAULT_MODEL_NO_TOKENS).strip() or DEFAULT_MODEL_NO_TOKENS
     if not OPENAI_API_KEY:
         return "Error: OPENAI_API_KEY is not set."
     try:
@@ -34,11 +35,10 @@ def generate(
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": user_prompt})
-        r = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-        )
+        kwargs: dict = {"model": model, "messages": messages, "max_tokens": max_tokens}
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        r = client.chat.completions.create(**kwargs)
         return (r.choices[0].message.content or "").strip()
     except Exception as e:
         logger.exception("OpenAI generate failed")

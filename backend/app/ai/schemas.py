@@ -71,6 +71,7 @@ class AgentBet(BaseModel):
 
 class Phase1Request(BaseModel):
     question: str
+    location: str | None = None  # e.g. "Toronto" -> question becomes "... in Toronto"
     use_rag: bool = True
     model: str | None = None
     where_filter: dict | None = None
@@ -78,35 +79,23 @@ class Phase1Request(BaseModel):
 
 class Phase1Response(BaseModel):
     question: str
+    location: str | None = None
     initial_bets: list[AgentBet]
-    web_scrape_snippets: list[str]
-    rag_context: str
-    rag_chunks: list[str] = []
-
-
-class AgentRagAssignment(BaseModel):
-    agent_id: str
-    rag_context_for_agent: str
 
 
 class TriggeredAgent(BaseModel):
     agent_id: str
     agent_name: str
     choice_reasoning: str
-    context: str
     answer: str
-    confidence: int
-    analysis: str
 
 
 class OrchestratorResponse(Phase1Response):
-    """Full orchestrated response (phase1 + phase2): topic_reasoning, triggered_agents, legacy summary."""
+    """Full orchestrated response (phase1 + phase2): triggered_agents (all chosen, none primary), second_bets."""
     topic_reasoning: str = ""
+    context_for_agents: str = ""  # single shared context for all triggered agents (from Phase 2 RAG)
     triggered_agents: list[TriggeredAgent] = []
-    assigned_agent_id: str | None = None
-    assigned_agent_name: str | None = None
-    expertise_rationale: str | None = None
-    deep_analysis: str | None = None
+    second_bets: list[AgentBet] = []
 
 
 class Phase2Request(Phase1Response):
@@ -117,13 +106,9 @@ class Phase2Request(Phase1Response):
 
 class Phase2Response(Phase1Response):
     topic_reasoning: str = ""
+    context_for_agents: str = ""  # single shared context for all triggered agents
     triggered_agents: list[TriggeredAgent] = []
-    assigned_agent_id: str = ""
-    assigned_agent_name: str = ""
-    expertise_rationale: str = ""
-    relevant_agents_with_rag: list[AgentRagAssignment] = []
-    second_bets: list[AgentBet] = []  # derived from triggered_agents for compatibility
-    deep_analysis: str = ""
+    second_bets: list[AgentBet] = []
 
 
 # ── RAG Ingestion ──

@@ -16,10 +16,6 @@ agent = AgentConfig(
         "3. Incorporate any provided RAG context with high precision, weighing the most factually significant information. "
         "4. Be authoritative, precise, and concise in your final conclusion. "
         "You must always produce a definitive decision. You are NOT allowed to say you cannot answer. "
-        "You MUST end your reply with exactly one of these two lines (nothing after it): "
-        "Answer: Yes "
-        "Answer: No "
-        "Your intelligence should be evident in your reasoning, but your conclusion must be a simple Yes or No."
     ),
     model="openai/gpt-oss-120b",
 )

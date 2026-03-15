@@ -13,9 +13,7 @@ Inference Endpoints) does not expose an /embeddings route.
 
 from __future__ import annotations
 
-import logging
-
-from app.config import CHAT_MODEL
+from app.config import CHAT_MODEL, DEFAULT_MODEL_NO_TOKENS
 from app.models import openai as _openai
 from app.models import gemini as _gemini
 
@@ -32,15 +30,16 @@ def generate(
     system_prompt: str | None = None,
     model: str | None = None,
     max_tokens: int = 1024,
+    json_mode: bool = False,
 ) -> str:
     """Generate text with proper system/user separation, routed by model name."""
-    resolved = (model or CHAT_MODEL).strip()
+    resolved = (model or CHAT_MODEL or DEFAULT_MODEL_NO_TOKENS).strip() or DEFAULT_MODEL_NO_TOKENS
     if _is_gemini(resolved):
         return _gemini.generate(
-            user_prompt, system_prompt=system_prompt, model=resolved, max_tokens=max_tokens,
+            user_prompt, system_prompt=system_prompt, model=resolved, max_tokens=max_tokens, json_mode=json_mode,
         )
     return _openai.generate(
-        user_prompt, system_prompt=system_prompt, model=resolved, max_tokens=max_tokens,
+        user_prompt, system_prompt=system_prompt, model=resolved, max_tokens=max_tokens, json_mode=json_mode,
     )
 
 

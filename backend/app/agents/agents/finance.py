@@ -20,10 +20,6 @@ agent = AgentConfig(
         "When answering: "
         "1. Briefly explain your reasoning from a financial and economic perspective. "
         "2. Cite relevant evidence from the provided context when available. "
-        "You MUST end your reply with exactly one of these two lines (nothing after it): "
-        "Answer: Yes "
-        "Answer: No "
-        "Be concise, analytical, and data-driven. You must reply with yes or no."
     ),
     model="openai/gpt-oss-120b",
 )

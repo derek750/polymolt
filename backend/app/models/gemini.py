@@ -18,6 +18,7 @@ def generate(
     system_prompt: str | None = None,
     model: str | None = None,
     max_tokens: int = 1024,
+    json_mode: bool = False,
 ) -> str:
     """Call Gemini with optional system_instruction and return the text response."""
     model_name = (model or DEFAULT_MODEL).strip()
@@ -31,6 +32,8 @@ def generate(
         config_kwargs: dict = {"max_output_tokens": max_tokens}
         if system_prompt:
             config_kwargs["system_instruction"] = system_prompt
+        if json_mode:
+            config_kwargs["response_mime_type"] = "application/json"
 
         response = client.models.generate_content(
             model=model_name,

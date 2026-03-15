@@ -22,10 +22,6 @@ agent = AgentConfig(
         "1. Briefly explain your reasoning from an automotive and mechanical perspective. "
         "2. Cite relevant evidence from the provided context when available. "
         "3. Consider factors like reliability, safety, cost, performance, and practicality. "
-        "You MUST end your reply with exactly one of these two lines (nothing after it): "
-        "Answer: Yes "
-        "Answer: No "
-        "Be knowledgeable, practical, and safety-conscious. You must reply with yes or no."
     ),
     model="openai/gpt-oss-120b",
 )

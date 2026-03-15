@@ -9,9 +9,9 @@ Flow
    a. Collects the reasons from all agents.
    b. Uses RAG (news/search) context only; no web scraping.
    c. Asks the LLM to identify which expertise the question falls under and
-      picks the best-fit agent.
-   d. The assigned agent performs a deep analysis using the RAG context +
-      the other agents' reasoning as additional context.
+      picks the best-fit agent(s).
+   d. Each relevant agent runs the pipeline again with orchestrator-assigned
+      RAG context (second bet); results are collected as triggered_agents.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Iterator
 
 from app.models import generate
-from app.ai.pipeline import run_pipeline
 from app.ai.rag import retrieve, retrieve_chunks, embed as embed_text
 from app.ai.bet_sizing import get_bet_for_agent, compute_confidence
 
@@ -37,23 +36,51 @@ def _debug_log(msg: str):
     logger.debug(msg)
 
 
+def _normalize_answer(answer: str) -> str:
+    """Normalize a free-form answer to YES or NO."""
+    a = (answer or "").strip().upper()
+    if a in ("YES", "TRUE", "Y"):
+        return "YES"
+    if a in ("NO", "FALSE", "N"):
+        return "NO"
+    if "YES" in a:
+        return "YES"
+    if "NO" in a:
+        return "NO"
+    return "NO"
+
+
+def _question_with_location(question: str, location: str | None) -> str:
+    """If location is provided, append ' in {location}' to the question (e.g. 'Is this hospital good' -> 'Is this hospital good in Toronto')."""
+    if not (location and location.strip()):
+        return question
+    loc = location.strip()
+    q = (question or "").strip().rstrip(".?")
+    return f"{q} in {loc}" if q else question
+
+
 # ── Phase 1: Initial bets ───────────────────────────────────────────────
 
 _BET_SYSTEM = "You are {agent_name}. {system_prompt}"
 
 _BET_USER = """\
-A prediction market is predicting outcomes and evaluating claims about locations in Toronto (e.g., hospitals, nurseries, attractions) to help mitigate asymmetric information for the public.
-Consider the following question or claim:
+You are participating in a prediction market that evaluates questions about locations in Toronto (e.g., hospitals, nurseries, attractions) to help mitigate asymmetric information for the public.
 
-\"\"\"{question}\"\"\"
+Question: \"\"\"{question}\"\"\"
 
 {context_block}
 
-Evaluate this location/claim from your area of expertise.
-Respond with ONLY a strict JSON object (no prose before or after):
+Think carefully from your area of expertise. Consider all evidence — both supporting and opposing.
+- YES means you believe the answer to the question is affirmative / the claim is likely true.
+- NO means you believe the answer to the question is negative / the claim is likely false.
+Do not default to NO out of caution. If evidence supports YES, answer YES. Be honest about what the evidence shows.
+Give a thorough, detailed explanation of your reasoning.
+
+Respond with ONLY a strict JSON object. Do NOT use markdown formatting anywhere.
+The "answer" field MUST be exactly the string "YES" or exactly the string "NO" (nothing else).
 {{
-  "answer": "YES" or "NO",
-  "reasoning": "<1-3 sentence explanation>"
+  "answer": "YES",
+  "reasoning": "your detailed plain-text explanation here, no markdown"
 }}
 """
 
@@ -64,11 +91,18 @@ def _run_single_bet(
     context: str,
     model: str | None,
     question_embedding: list[float] | None = None,
+    additional_context: str | None = None,
 ) -> dict[str, Any]:
-    ctx = f"Context:\n{context}" if context else "(No additional context.)"
+    context_parts: list[str] = []
+    if context:
+        context_parts.append(f"Context:\n{context}")
+    if additional_context:
+        context_parts.append(f"Additional context:\n{additional_context}")
+    ctx = "\n\n".join(context_parts) if context_parts else "(No additional context.)"
+
     system = _BET_SYSTEM.format(agent_name=agent.name, system_prompt=agent.system_prompt)
     user = _BET_USER.format(question=question, context_block=ctx)
-    raw = generate(user, system_prompt=system, model=agent.model or model, max_tokens=300)
+    raw = generate(user, system_prompt=system, model=agent.model or model, max_tokens=1000, json_mode=True)
 
     try:
         data = json.loads(raw)
@@ -88,7 +122,7 @@ def _run_single_bet(
     return {
         "agent_id": agent.id,
         "agent_name": agent.name,
-        "answer": str(data.get("answer", "UNKNOWN")).upper(),
+        "answer": _normalize_answer(str(data.get("answer", "UNKNOWN"))),
         "confidence": confidence,
         "reasoning": reasoning,
     }
@@ -114,37 +148,12 @@ def _run_single_agent_bet(
     model: str | None,
     question_embedding: list[float] | None = None,
 ) -> dict[str, Any]:
-    """Run pipeline for one agent and return bet dict. Used for parallel phase1."""
-    raw = run_pipeline(
-        message=question,
-        agent_id=agent.id,
-        use_rag=use_rag,
-        model=model,
-    )
-    try:
-        data = json.loads(raw)
-        answer = str(data.get("answer", "UNKNOWN")).upper()
-        reasoning = str(data.get("reasoning", ""))
-    except Exception:
-        logger.warning("Agent %s pipeline returned non-JSON: %s", agent.id, raw[:200])
-        answer = "UNKNOWN"
-        reasoning = raw
-
-    bet_info = get_bet_for_agent(
-        agent,
-        question_prompt=question,
-        response_text=reasoning,
-        question_embedding=question_embedding,
-    )
-    confidence = compute_confidence(bet_info)
-
-    return {
-        "agent_id": agent.id,
-        "agent_name": agent.name,
-        "answer": answer,
-        "confidence": confidence,
-        "reasoning": reasoning,
-    }
+    """Run bet for one agent with its own RAG. Used for parallel phase1."""
+    rag_context = ""
+    if use_rag:
+        collection = "sample_rag" if agent.id else "news_rag"
+        rag_context = retrieve(question, top_k=4, collection_name=collection)
+    return _run_single_bet(question, agent, rag_context, model, question_embedding=question_embedding)
 
 
 def _run_phase1_via_pipeline(
@@ -153,7 +162,7 @@ def _run_phase1_via_pipeline(
     model: str | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Phase 1 using /run pipeline: run run_pipeline for each agent (same as POST /run per agent).
+    Phase 1: run each agent with structured bet prompt + its own RAG.
     Returns list of bets; each response is parsed as JSON if possible, else reasoning=response.
     """
     q_emb = embed_text(question)
@@ -166,6 +175,7 @@ def _run_phase1_via_pipeline(
 
 def run_phase1_stream(
     question: str,
+    location: str | None = None,
     use_rag: bool = True,
     model: str | None = None,
 ) -> Iterator[dict[str, Any]]:
@@ -174,18 +184,12 @@ def run_phase1_stream(
     then a final phase1_complete event with the full result.
     Events: {"event": "agent_done", "bet": {...}} and {"event": "phase1_complete", "result": Phase1Response dict}.
     """
-    if use_rag:
-        rag_chunks = retrieve_chunks(question, top_k=4, collection_name="news_rag")
-        rag_context = "\n\n".join(rag_chunks) if rag_chunks else ""
-    else:
-        rag_chunks = []
-        rag_context = ""
-
-    q_emb = embed_text(question)
+    effective_question = _question_with_location(question, location)
+    q_emb = embed_text(effective_question)
     bets: list[dict[str, Any]] = []
     with ThreadPoolExecutor(max_workers=len(AGENTS)) as executor:
         future_to_agent = {
-            executor.submit(_run_single_agent_bet, agent, question, use_rag, model, q_emb): agent
+            executor.submit(_run_single_agent_bet, agent, effective_question, use_rag, model, q_emb): agent
             for agent in AGENTS
         }
         for future in as_completed(future_to_agent):
@@ -194,16 +198,67 @@ def run_phase1_stream(
             yield {"event": "agent_done", "bet": bet}
 
     result = {
-        "question": question,
+        "question": effective_question,
+        "location": location,
         "initial_bets": bets,
-        "web_scrape_snippets": [],
-        "rag_context": rag_context,
-        "rag_chunks": rag_chunks,
     }
     yield {"event": "phase1_complete", "result": result}
 
 
 # ── Phase 2: Orchestrator ───────────────────────────────────────────────
+
+_KEY_FACTS_SYSTEM = (
+    "You are an analyst for a prediction market about Toronto locations (hospitals, nurseries, attractions). "
+    "Given RAG-retrieved text chunks and a question, you identify key facts from the chunks that are relevant to the question. "
+    "Each fact must include a short, verbatim quote from the RAG that supports it."
+)
+
+_KEY_FACTS_USER = """\
+Question: \"\"\"{question}\"\"\"
+
+RAG chunks (retrieved context), numbered:
+{rag_chunks_numbered}
+
+Task: List key facts from the RAG that are relevant to evaluating this question. For each fact, include a brief verbatim quote from the chunks.
+
+Respond with ONLY a strict JSON object:
+{{
+  "key_facts": [
+    {{ "fact": "<one-sentence fact>", "quote": "<short verbatim quote from the RAG>" }},
+    ...
+  ]
+}}
+"""
+
+
+def _extract_key_facts_from_rag(
+    question: str,
+    rag_chunks: list[str],
+    model: str | None,
+) -> list[dict[str, str]]:
+    """
+    Use the orchestrator's RAG to identify key facts (with quotes) relevant to the question.
+    Returns list of {"fact": "...", "quote": "..."}; empty list if no chunks or parse failure.
+    """
+    if not rag_chunks:
+        return []
+    rag_numbered = "\n\n".join(
+        f"[Chunk {i+1}]\n{chunk}" for i, chunk in enumerate(rag_chunks)
+    )
+    user = _KEY_FACTS_USER.format(question=question, rag_chunks_numbered=rag_numbered)
+    raw = generate(user, system_prompt=_KEY_FACTS_SYSTEM, model=model, max_tokens=1500, json_mode=True)
+    try:
+        data = json.loads(raw)
+        items = data.get("key_facts") or []
+        return [
+            {"fact": str(x.get("fact", "")), "quote": str(x.get("quote", ""))}
+            for x in items
+            if isinstance(x, dict)
+        ]
+    except Exception:
+        logger.warning("Key facts extraction returned non-JSON: %s", raw[:300])
+        return []
+
 
 _EXPERTISE_SYSTEM = (
     "You are an orchestrator for a prediction market focused on evaluating Toronto locations (hospitals, nurseries, attractions). "
@@ -219,7 +274,10 @@ Question prompt: {question_prompt}
 
 Question: \"\"\"{question}\"\"\"
 
-RAG chunks (retrieved context), numbered for reference:
+Key facts from RAG (quoted), identified as relevant to the topic:
+{key_facts_text}
+
+RAG chunks (full text), numbered for reference:
 {rag_chunks_numbered}
 
 The following specialist agents each placed a bet on this question:
@@ -233,20 +291,15 @@ Available agents — id, name, description, and full system prompt (their specia
 
 Tasks:
 1. Provide an "overall_topic_reasoning" about what this topic/question is about.
-2. Identify ALL agents whose specialization is important for this question.
-3. For each relevant agent:
-   - Provide a "choice_reasoning" for why this specific agent's expertise is needed.
-   - Assign a "rag_context_for_agent": copy or summarize the most relevant RAG excerpt for that agent.
+2. Provide a single "context_for_agents": a summary for the selected agents that uses the key facts above (and their quotes) to explain how the RAG relates to the question. Weave in the quoted facts where relevant.
+3. Identify ALL agents whose specialization is important for this question. For each, provide only "agent_id" and "choice_reasoning" (why this agent's expertise is needed).
 
 Respond with ONLY a strict JSON object:
 {{
   "overall_topic_reasoning": "<explanation>",
+  "context_for_agents": "<summary using the key facts and quotes for the agents>",
   "relevant_agents": [
-    {{ 
-      "agent_id": "<id>", 
-      "choice_reasoning": "<why this agent>",
-      "rag_context_for_agent": "<relevant RAG excerpt>" 
-    }}
+    {{ "agent_id": "<id>", "choice_reasoning": "<why this agent>" }}
   ]
 }}
 """
@@ -258,11 +311,14 @@ def _identify_expertise_and_assign_rag(
     rag_chunks: list[str],
     bets: list[dict[str, Any]],
     web_snippets: list[str],
+    key_facts: list[dict[str, str]],
     model: str | None,
-) -> tuple[str, list[dict[str, Any]]]:
+) -> tuple[str, str, list[dict[str, Any]]]:
     """
-    Return (topic_reasoning, relevant_agents_list).
-    relevant_agents_list: list of dicts with {agent_id, choice_reasoning, rag_context_for_agent}
+    Return (topic_reasoning, context_for_agents, relevant_agents_list).
+    context_for_agents: single shared context string for all agents.
+    relevant_agents_list: list of dicts with {agent_id, choice_reasoning}.
+    key_facts: list of {"fact", "quote"} from _extract_key_facts_from_rag.
     """
     agent_summaries = "\n".join(
         f"- {b['agent_name']} ({b['agent_id']}): {b['answer']} "
@@ -277,168 +333,60 @@ def _identify_expertise_and_assign_rag(
     rag_chunks_numbered = "\n\n".join(
         f"[Chunk {i+1}]\n{chunk}" for i, chunk in enumerate(rag_chunks)
     ) if rag_chunks else "(no RAG chunks provided)"
+    key_facts_text = "\n".join(
+        f"- {item['fact']} (quote: \"{item['quote']}\")" for item in key_facts
+    ) if key_facts else "(no key facts extracted)"
 
     user = _EXPERTISE_USER.format(
         question_prompt=question_prompt,
         question=question,
+        key_facts_text=key_facts_text,
         rag_chunks_numbered=rag_chunks_numbered,
         agent_summaries=agent_summaries,
         web_snippets=snippets_text,
         agent_descriptions_with_prompts=agent_descriptions_with_prompts,
     )
     # Using a larger max_tokens because we're asking for more detail
-    raw = generate(user, system_prompt=_EXPERTISE_SYSTEM, model=model, max_tokens=2000)
+    raw = generate(user, system_prompt=_EXPERTISE_SYSTEM, model=model, max_tokens=2000, json_mode=True)
 
     try:
         data = json.loads(raw)
         topic_reasoning = str(data.get("overall_topic_reasoning", ""))
+        context_for_agents = str(data.get("context_for_agents", ""))
         relevant_agents = data.get("relevant_agents") or []
-        # Ensure minimal structure
         if not relevant_agents:
-             # Fallback: if none selected, pick the first one
-             relevant_agents = [{"agent_id": AGENTS[0].id, "choice_reasoning": "Default agent selection.", "rag_context_for_agent": ""}]
+            relevant_agents = [{"agent_id": AGENTS[0].id, "choice_reasoning": "Default agent selection."}]
     except Exception:
         logger.warning("Expertise identification returned non-JSON: %s", raw)
         topic_reasoning = "Failed to parse orchestrator topic reasoning."
-        relevant_agents = [{"agent_id": AGENTS[0].id, "choice_reasoning": "Fallback due to parsing error.", "rag_context_for_agent": ""}]
+        context_for_agents = ""
+        relevant_agents = [{"agent_id": AGENTS[0].id, "choice_reasoning": "Fallback due to parsing error."}]
 
-    return topic_reasoning, relevant_agents
-
-
-# ── Phase 2d: Deep analysis ─────────────────────────────────────────────
-
-_DEEP_SYSTEM = (
-    "You are {agent_name}. {system_prompt} "
-    "You have been selected as the most qualified analyst for this question."
-)
-
-_DEEP_USER = """\
-A prediction market is evaluating a claim about a Toronto location (e.g., hospital, nursery, attraction) to mitigate asymmetric information:
-
-\"\"\"{question}\"\"\"
-
-Other analysts placed the following bets:
-{other_bets}
-
-Additional context (if any):
-{web_snippets}
-
-{context_block}
-
-Provide a thorough, evidence-based analysis. Consider the other analysts'
-perspectives and the RAG/context above. Conclude with your final assessment
-of whether the answer is YES or NO, and your overall confidence level.
-"""
-
-
-def _parse_agent_analysis(raw_analysis: str) -> tuple[str, str]:
-    """Parse the agent's final deep analysis to extract Answer."""
-    answer = "UNKNOWN"
-    clean_analysis = raw_analysis.strip()
-
-    lines = [line.strip() for line in clean_analysis.split("\n") if line.strip()]
-    if lines:
-        last_line = lines[-1].lower()
-        if "answer: yes" in last_line:
-            answer = "YES"
-        elif "answer: no" in last_line:
-            answer = "NO"
-
-    return answer, clean_analysis
-
-
-def _run_deep_analysis(
-    question: str,
-    agent_id: str,
-    bets: list[dict[str, Any]],
-    web_snippets: list[str],
-    context: str,
-    model: str | None,
-    question_embedding: list[float] | None = None,
-) -> tuple[str, int, str]:
-    """Returns (answer, confidence, analysis_text)."""
-    agent = get_agent(agent_id) or AGENTS[0]
-
-    other_bets = "\n".join(
-        f"- {b['agent_name']}: {b['answer']} (confidence {b['confidence']}%) "
-        f"— {b['reasoning']}"
-        for b in bets
-    )
-    snippets_text = "\n".join(web_snippets) if web_snippets else "(none)"
-    ctx = f"RAG context:\n{context}" if context else "(No RAG context available.)"
-
-    system = _DEEP_SYSTEM.format(agent_name=agent.name, system_prompt=agent.system_prompt)
-    user = _DEEP_USER.format(
-        question=question,
-        other_bets=other_bets,
-        web_snippets=snippets_text,
-        context_block=ctx,
-    )
-    raw = generate(user, system_prompt=system, model=agent.model or model, max_tokens=1024)
-    answer, clean_analysis = _parse_agent_analysis(raw)
-
-    bet_info = get_bet_for_agent(
-        agent,
-        question_prompt=question,
-        response_text=clean_analysis,
-        question_embedding=question_embedding,
-    )
-    confidence = compute_confidence(bet_info)
-
-    if context:
-        header = "🟢 [ORCHESTRATOR: RAG CONTEXT ACTIVE]\n" + "="*40 + "\n"
-    else:
-        header = "🔴 [ORCHESTRATOR: NO RAG CONTEXT FOUND]\n" + "="*40 + "\n"
-    analysis = f"{header}{clean_analysis}"
-    return answer, confidence, analysis
+    return topic_reasoning, context_for_agents, relevant_agents
 
 
 def _run_single_agent_second_bet(
     agent_id: str,
     question: str,
-    rag_context_for_agent: str,
+    context_for_agent: str,
     model: str | None,
     question_embedding: list[float] | None = None,
 ) -> dict[str, Any]:
-    """Run pipeline for one relevant agent with orchestrator-assigned RAG; return bet dict."""
+    """Run bet for one triggered agent: agent's own RAG + orchestrator context as additional."""
     agent = get_agent(agent_id) or AGENTS[0]
-    raw = run_pipeline(
-        message=question,
-        agent_id=agent_id,
-        use_rag=False,
-        model=model,
-        additional_context=rag_context_for_agent,
-    )
-    try:
-        data = json.loads(raw)
-        answer = str(data.get("answer", "UNKNOWN")).upper()
-        reasoning = str(data.get("reasoning", ""))
-    except Exception:
-        logger.warning("Agent %s second bet returned non-JSON: %s", agent_id, raw[:200])
-        answer = "UNKNOWN"
-        reasoning = raw
-
-    bet_info = get_bet_for_agent(
-        agent,
-        question_prompt=question,
-        response_text=reasoning,
+    rag_context = retrieve(question, top_k=4, collection_name="sample_rag")
+    return _run_single_bet(
+        question, agent, rag_context, model,
         question_embedding=question_embedding,
+        additional_context=context_for_agent,
     )
-    confidence = compute_confidence(bet_info)
-
-    return {
-        "agent_id": agent.id,
-        "agent_name": agent.name,
-        "answer": answer,
-        "confidence": confidence,
-        "reasoning": reasoning,
-    }
 
 
 # ── Public entry points ─────────────────────────────────────────────────
 
 def run_orchestrated_initial(
     question: str,
+    location: str | None = None,
     use_rag: bool = True,
     model: str | None = None,
     where_filter: dict | None = None,
@@ -447,238 +395,190 @@ def run_orchestrated_initial(
     Phase 1 (legacy): RAG + internal bet prompt per agent. No web scraping.
     Use run_phase1 for "same as /run per agent".
     """
+    effective_question = _question_with_location(question, location)
     if use_rag:
-        rag_chunks = retrieve_chunks(question, top_k=4, collection_name="news_rag", where_filter=where_filter)
+        rag_chunks = retrieve_chunks(effective_question, top_k=4, collection_name="news_rag", where_filter=where_filter)
         context = "\n\n".join(rag_chunks) if rag_chunks else ""
     else:
         rag_chunks = []
         context = ""
-    bets = _run_all_bets(question, context, model)
+    bets = _run_all_bets(effective_question, context, model)
 
     return {
-        "question": question,
+        "question": effective_question,
+        "location": location,
         "initial_bets": bets,
-        "web_scrape_snippets": [],
-        "rag_context": context,
-        "rag_chunks": rag_chunks,
     }
 
 
 def run_phase1(
     question: str,
+    location: str | None = None,
     use_rag: bool = True,
     model: str | None = None,
     where_filter: dict | None = None,
 ) -> dict[str, Any]:
     """
     Phase 1: Same as /run but runs every agent with /run.
-    1. Optional RAG retrieval (shared rag_context/rag_chunks for phase 2).
-    2. For each agent, run the same pipeline as POST /run; collect responses as initial_bets.
+    For each agent, run the same pipeline as POST /run; collect responses as initial_bets.
+    Phase 2 fetches its own RAG when invoked.
     """
-    if use_rag:
-        rag_chunks = retrieve_chunks(question, top_k=4, collection_name="news_rag", where_filter=where_filter)
-        rag_context = "\n\n".join(rag_chunks) if rag_chunks else ""
-    else:
-        rag_chunks = []
-        rag_context = ""
-    bets = _run_phase1_via_pipeline(question, use_rag=use_rag, model=model)
+    effective_question = _question_with_location(question, location)
+    bets = _run_phase1_via_pipeline(effective_question, use_rag=use_rag, model=model)
     return {
-        "question": question,
+        "question": effective_question,
+        "location": location,
         "initial_bets": bets,
-        "web_scrape_snippets": [],
-        "rag_context": rag_context,
-        "rag_chunks": rag_chunks,
     }
 
 
 def run_orchestrated_phase2(
     question: str,
     initial_bets: list[dict[str, Any]],
-    web_scrape_snippets: list[str],
-    rag_context: str,
-    rag_chunks: list[str] | None = None,
     question_prompt: str | None = None,
     model: str | None = None,
+    where_filter: dict | None = None,
 ) -> dict[str, Any]:
     """
     Phase 2 of the orchestrated pipeline:
-    1. Orchestrator receives RAG chunks, question, question_prompt.
-    2. Identifies ONE OR MORE relevant agents and assigns specific RAG context.
-    3. Runs each triggered agent and collects their results.
+    1. Fetches RAG (news) for the question.
+    2. Extracts key facts (with quotes from RAG) relevant to the topic.
+    3. Orchestrator produces context_for_agents (using those facts) and selects relevant agents.
+    4. Runs each triggered agent with the same shared context; collects results.
     """
     bets = initial_bets
-    web_snippets = web_scrape_snippets
-    chunks = rag_chunks if rag_chunks is not None else ([s for s in rag_context.split("\n\n") if s.strip()] if rag_context else [])
     q_prompt = question_prompt or QUESTION_PROMPT_PLACEHOLDER
+    rag_chunks = retrieve_chunks(question, top_k=4, collection_name="news_rag", where_filter=where_filter)
+    chunks = rag_chunks if rag_chunks else []
 
-    topic_reasoning, relevant_agents_info = _identify_expertise_and_assign_rag(
+    key_facts = _extract_key_facts_from_rag(question, chunks, model)
+    _debug_log(f"Phase 2: extracted {len(key_facts)} key facts from RAG.")
+
+    topic_reasoning, context_for_agents, relevant_agents_info = _identify_expertise_and_assign_rag(
         question=question,
         question_prompt=q_prompt,
         rag_chunks=chunks,
         bets=bets,
-        web_snippets=web_snippets,
+        web_snippets=[],
+        key_facts=key_facts,
         model=model,
     )
 
     q_emb = embed_text(question)
     _debug_log(f"Phase 2 processing: {len(relevant_agents_info)} relevant agents found.")
     triggered_agents: list[dict[str, Any]] = []
+    second_bets: list[dict[str, Any]] = []
     for i, info in enumerate(relevant_agents_info):
         aid = info.get("agent_id")
         _debug_log(f"Triggering agent {i+1}/{len(relevant_agents_info)}: {aid}")
-        reasoning = info.get("choice_reasoning", "")
-        agent_specific_rag = info.get("rag_context_for_agent", "") or rag_context
+        choice_reasoning = info.get("choice_reasoning", "")
 
-        agent_obj = get_agent(aid) or AGENTS[0]
-
-        ans, conf, analysis = _run_deep_analysis(
+        bet = _run_single_agent_second_bet(
+            agent_id=aid,
             question=question,
-            agent_id=agent_obj.id,
-            bets=bets,
-            web_snippets=web_snippets,
-            context=agent_specific_rag,
+            context_for_agent=context_for_agents,
             model=model,
             question_embedding=q_emb,
         )
-
         triggered_agents.append({
-            "agent_id": agent_obj.id,
-            "agent_name": agent_obj.name,
-            "choice_reasoning": reasoning,
-            "context": agent_specific_rag,
-            "answer": ans,
-            "confidence": conf,
-            "analysis": analysis,
+            "agent_id": bet["agent_id"],
+            "agent_name": bet["agent_name"],
+            "choice_reasoning": choice_reasoning,
+            "answer": bet["answer"],
         })
-
-    # Legacy / Phase2Response: primary = first triggered agent
-    primary = triggered_agents[0] if triggered_agents else {
-        "agent_id": "none", "agent_name": "None", "choice_reasoning": "None",
-        "context": "", "answer": "UNKNOWN", "confidence": 0, "analysis": "No agents triggered.",
-    }
-
-    # Phase2Response also expects relevant_agents_with_rag and second_bets
-    relevant_agents_with_rag = [
-        {"agent_id": t["agent_id"], "rag_context_for_agent": t["context"]}
-        for t in triggered_agents
-    ]
-    second_bets = [
-        {
-            "agent_id": t["agent_id"],
-            "agent_name": t["agent_name"],
-            "answer": t["answer"],
-            "confidence": t["confidence"],
-            "reasoning": t["analysis"],
-        }
-        for t in triggered_agents
-    ]
+        second_bets.append({
+            "agent_id": bet["agent_id"],
+            "agent_name": bet["agent_name"],
+            "answer": bet["answer"],
+            "confidence": bet["confidence"],
+            "reasoning": bet["reasoning"],
+        })
 
     return {
         "topic_reasoning": topic_reasoning,
+        "context_for_agents": context_for_agents,
         "triggered_agents": triggered_agents,
-        "assigned_agent_id": primary["agent_id"],
-        "assigned_agent_name": primary["agent_name"],
-        "expertise_rationale": primary["choice_reasoning"],
-        "relevant_agents_with_rag": relevant_agents_with_rag,
         "second_bets": second_bets,
-        "deep_analysis": primary["analysis"],
     }
 
 
 def run_phase2_stream(
     question: str,
     initial_bets: list[dict[str, Any]],
-    web_scrape_snippets: list[str],
-    rag_context: str,
-    rag_chunks: list[str] | None = None,
     question_prompt: str | None = None,
     model: str | None = None,
+    where_filter: dict | None = None,
 ) -> Iterator[dict[str, Any]]:
     """
-    Phase 2 with SSE: orchestrator assigns RAG to relevant agents; each makes a second bet (streamed);
-    then assigned agent runs deep analysis; final phase2_complete with full result.
-    Events: orchestrator_done, agent_second_bet_done (per relevant agent), deep_analysis_done, phase2_complete.
+    Phase 2 with SSE: fetches RAG, extracts key facts, orchestrator produces context_for_agents and selects agents;
+    each makes a second bet (streamed); final phase2_complete with full result.
+    Events: orchestrator_done, agent_second_bet_done (per relevant agent), phase2_complete.
     """
-    web_snippets = web_scrape_snippets
-    chunks = rag_chunks if rag_chunks is not None else ([s for s in rag_context.split("\n\n") if s.strip()] if rag_context else [])
     q_prompt = question_prompt or QUESTION_PROMPT_PLACEHOLDER
+    rag_chunks = retrieve_chunks(question, top_k=4, collection_name="news_rag", where_filter=where_filter)
+    chunks = rag_chunks if rag_chunks else []
 
-    topic_reasoning, relevant_agents_info = _identify_expertise_and_assign_rag(
+    key_facts = _extract_key_facts_from_rag(question, chunks, model)
+    _debug_log(f"Phase 2: extracted {len(key_facts)} key facts from RAG.")
+
+    topic_reasoning, context_for_agents, relevant_agents_info = _identify_expertise_and_assign_rag(
         question=question,
         question_prompt=q_prompt,
         rag_chunks=chunks,
         bets=initial_bets,
-        web_snippets=web_snippets,
+        web_snippets=[],
+        key_facts=key_facts,
         model=model,
     )
-    # Derive single-assigned shape for stream events (first relevant agent)
-    assigned_id = relevant_agents_info[0]["agent_id"] if relevant_agents_info else (AGENTS[0].id if AGENTS else "")
-    rationale = relevant_agents_info[0].get("choice_reasoning", "") if relevant_agents_info else ""
-    agent_rag_map = {r["agent_id"]: r.get("rag_context_for_agent", "") for r in relevant_agents_info}
-    assigned_agent = get_agent(assigned_id) or (AGENTS[0] if AGENTS else None)
-    if not assigned_agent:
-        raise ValueError("No agents configured")
-    relevant_agents_with_rag = [
-        {"agent_id": r["agent_id"], "rag_context_for_agent": r.get("rag_context_for_agent", "")}
-        for r in relevant_agents_info
-    ]
-
     q_emb = embed_text(question)
 
     yield {
         "event": "orchestrator_done",
         "topic_reasoning": topic_reasoning,
-        "assigned_agent_id": assigned_agent.id,
-        "assigned_agent_name": assigned_agent.name,
-        "expertise_rationale": rationale,
-        "relevant_agents_with_rag": relevant_agents_with_rag,
+        "context_for_agents": context_for_agents,
     }
 
     second_bets: list[dict[str, Any]] = []
-    if agent_rag_map:
-        with ThreadPoolExecutor(max_workers=len(agent_rag_map)) as executor:
+    if relevant_agents_info:
+        with ThreadPoolExecutor(max_workers=len(relevant_agents_info)) as executor:
             future_to_agent = {
                 executor.submit(
                     _run_single_agent_second_bet,
-                    aid,
+                    info.get("agent_id"),
                     question,
-                    ctx,
+                    context_for_agents,
                     model,
                     q_emb,
-                ): aid
-                for aid, ctx in agent_rag_map.items()
+                ): info.get("agent_id")
+                for info in relevant_agents_info
             }
             for future in as_completed(future_to_agent):
                 bet = future.result()
                 second_bets.append(bet)
                 yield {"event": "agent_second_bet_done", "bet": bet}
 
-    agent_specific_rag = agent_rag_map.get(assigned_id) or rag_context
-    _ans, _conf, analysis = _run_deep_analysis(
-        question=question,
-        agent_id=assigned_id,
-        bets=initial_bets,
-        web_snippets=web_snippets,
-        context=agent_specific_rag,
-        model=model,
-        question_embedding=q_emb,
-    )
-    yield {"event": "deep_analysis_done", "deep_analysis": analysis}
-
+    rationale_by_id = {r["agent_id"]: r.get("choice_reasoning", "") for r in relevant_agents_info}
+    triggered_agents = [
+        {
+            "agent_id": b["agent_id"],
+            "agent_name": b["agent_name"],
+            "choice_reasoning": rationale_by_id.get(b["agent_id"], ""),
+            "answer": b["answer"],
+        }
+        for b in second_bets
+    ]
     result = {
         "topic_reasoning": topic_reasoning,
-        "assigned_agent_id": assigned_agent.id,
-        "assigned_agent_name": assigned_agent.name,
-        "expertise_rationale": rationale,
-        "relevant_agents_with_rag": relevant_agents_with_rag,
+        "context_for_agents": context_for_agents,
+        "triggered_agents": triggered_agents,
         "second_bets": second_bets,
-        "deep_analysis": analysis,
     }
     yield {"event": "phase2_complete", "result": result}
 
 
 def run_orchestrated_pipeline(
     question: str,
+    location: str | None = None,
     use_rag: bool = True,
     model: str | None = None,
     where_filter: dict | None = None,
@@ -686,26 +586,22 @@ def run_orchestrated_pipeline(
     """
     Full orchestrated pipeline:
     1. All agents place an initial bet.
-    2. Orchestrator collects reasons, web-scrapes, identifies expertise,
-       assigns the best agent for a deep analysis.
+    2. Orchestrator identifies expertise, assigns RAG to relevant agents,
+       and each runs a second bet via the pipeline.
     """
-    _debug_log(f"Starting pipeline for question: {question}")
-    # Phase 1 — initial bets + RAG (no web scrape)
-    phase1 = run_orchestrated_initial(question=question, use_rag=use_rag, model=model, where_filter=where_filter)
+    effective_question = _question_with_location(question, location)
+    _debug_log(f"Starting pipeline for question: {effective_question}")
+    # Phase 1 — initial bets
+    phase1 = run_orchestrated_initial(question=question, location=location, use_rag=use_rag, model=model, where_filter=where_filter)
     _debug_log("Phase 1 complete.")
-    context = phase1["rag_context"]
-    bets = phase1["initial_bets"]
-    web_snippets = phase1["web_scrape_snippets"]
 
-    # Phase 2 — expertise selection + RAG assignment + deep analysis
+    # Phase 2 — fetches its own RAG; expertise selection + context assignment + second bets
     phase2 = run_orchestrated_phase2(
-        question=question,
-        initial_bets=bets,
-        web_scrape_snippets=web_snippets,
-        rag_context=context,
-        rag_chunks=phase1.get("rag_chunks"),
+        question=phase1["question"],
+        initial_bets=phase1["initial_bets"],
         question_prompt=QUESTION_PROMPT_PLACEHOLDER,
         model=model,
+        where_filter=where_filter,
     )
 
     return {**phase1, **phase2}

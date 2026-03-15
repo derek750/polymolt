@@ -50,12 +50,38 @@ Response:
 - The app uses **ChromaDB** in-memory for the vector store. If no documents have been added, RAG returns no context and the prompt still runs with "(No RAG context loaded.)".
 - To add documents, use the `app.rag` module (e.g. from a script or an admin route): `add_documents(texts, ids)`.
 
+## IBM Db2 — saving orchestrate responses
+
+Each **POST /ai/orchestrate** response is saved to Db2 under one question: the question row, one **orchestrate_runs** row (topic_reasoning, deep_analysis, assigned_agent_id, expertise_rationale, rag_context, full_response JSON), and **stakeholder_responses** for every initial_bet (phase=`initial_bet`) and every triggered_agent (phase=`triggered`, with choice_reasoning, context, analysis in raw_payload).
+
+1. **Set DB2_DSN** in `.env` (see `.env.example`).
+2. **Create tables** (and add `phase` / `orchestrate_runs` if you already have questions): run the SQL in **`scripts/db2_orchestrate_schema.sql`** in your Db2 database.
+
+### How to verify data is saved
+
+- **List recent questions (with yes/no counts):**
+  ```bash
+  curl -s http://localhost:8000/db/questions | jq
+  ```
+- **Get one question and all AI responses (initial_bets + triggered, with phase and reasoning):**
+  ```bash
+  curl -s http://localhost:8000/db/questions/1 | jq
+  ```
+  Replace `1` with a question `id` from the list.
+- **Get the full orchestrate run for a question (topic_reasoning, deep_analysis, full_response JSON):**
+  ```bash
+  curl -s http://localhost:8000/db/questions/1/orchestrate | jq
+  ```
+
+You can also query Db2 directly (e.g. IBM Cloud console → Query editor): `SELECT * FROM questions`, `SELECT * FROM stakeholder_responses WHERE question_id = 1`, `SELECT * FROM orchestrate_runs WHERE question_id = 1`.
+
 ## Layout
 
 - **main.py** — FastAPI app; mounts routers from `app/api/`.
-- **app/api/pipeline.py** — AI router (`/ai`): POST /ai/run, GET /ai/agents.
-- **app/api/database.py** — DB router (`/db`): placeholder for future database routes.
-- **app/pipeline.py** — Builds prompt (system + RAG context + message), calls LLM, returns response.
-- **app/rag.py** — Embeddings + Chroma retrieval.
+- **app/ai/router.py** — AI router (`/ai`): POST /ai/run, POST /ai/orchestrate, GET /ai/agents, etc.
+- **app/db/router.py** — DB router (`/db`): POST /db/questions, GET /db/questions, GET /db/questions/{id}, GET /db/questions/{id}/orchestrate.
+- **app/ai/pipeline.py** — Builds prompt (system + RAG context + message), calls LLM, returns response.
+- **app/ai/rag.py** — Embeddings + Chroma retrieval.
 - **app/config.py** — Env config.
+- **scripts/db2_orchestrate_schema.sql** — Db2 DDL for orchestrate_runs and phase column.
 - **langflow_pipeline/** — Reference flow JSON (same logic as the code).

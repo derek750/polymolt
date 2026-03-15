@@ -38,7 +38,7 @@ Pipeline and flow reference live in `backend/`. See `backend/README.md` for deta
 
 ## Quick Start
 
-**Prerequisites**: Node 18+, Python 3.11+, and an OpenAI API key.
+**Prerequisites**: Node 18+, Python 3.11+, an OpenAI API key, and a Mapbox access token.
 
 ```bash
 # 1. Clone and enter
@@ -53,6 +53,12 @@ python -m uvicorn main:app --reload --port 8000
 # 3. Frontend (new terminal)
 cd frontend
 npm install
+
+# 3a. Set up Mapbox token (required for map functionality)
+# Create .env.local file with your Mapbox token:
+# NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_token_here
+# Get your token from https://account.mapbox.com/access-tokens/
+
 npm run dev
 
 # 4. Trigger the pipeline

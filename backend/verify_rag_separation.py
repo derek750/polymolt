@@ -29,7 +29,6 @@ def verify_separation():
     result = run_orchestrated_pipeline(question, use_rag=True)
     
     print(f"Orchestrator Topic Reasoning: {result.get('topic_reasoning')[:100]}...")
-    print(f"Orchestrator RAG Context indicator: {result.get('rag_context')[:100]}...")
     
     for agent in result.get('initial_bets', []):
         print(f"Agent {agent['agent_id']} Reasoning Snippet: {agent['reasoning'][:100]}...")
