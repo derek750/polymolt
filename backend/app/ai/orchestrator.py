@@ -37,9 +37,17 @@ def _debug_log(msg: str):
 
 
 def _normalize_answer(answer: str) -> str:
-    """Treat UNKNOWN or invalid answers as NO. Returns YES or NO."""
+    """Normalize a free-form answer to YES or NO."""
     a = (answer or "").strip().upper()
-    return "YES" if a == "YES" else "NO"
+    if a in ("YES", "TRUE", "Y"):
+        return "YES"
+    if a in ("NO", "FALSE", "N"):
+        return "NO"
+    if "YES" in a:
+        return "YES"
+    if "NO" in a:
+        return "NO"
+    return "NO"
 
 
 # ── Phase 1: Initial bets ───────────────────────────────────────────────
@@ -47,18 +55,23 @@ def _normalize_answer(answer: str) -> str:
 _BET_SYSTEM = "You are {agent_name}. {system_prompt}"
 
 _BET_USER = """\
-A prediction market is predicting outcomes and evaluating claims about locations in Toronto (e.g., hospitals, nurseries, attractions) to help mitigate asymmetric information for the public.
-Consider the following question or claim:
+You are participating in a prediction market that evaluates questions about locations in Toronto (e.g., hospitals, nurseries, attractions) to help mitigate asymmetric information for the public.
 
-\"\"\"{question}\"\"\"
+Question: \"\"\"{question}\"\"\"
 
 {context_block}
 
-Evaluate this location/claim from your area of expertise. Give a thorough, detailed explanation of your reasoning.
+Think carefully from your area of expertise. Consider all evidence — both supporting and opposing.
+- YES means you believe the answer to the question is affirmative / the claim is likely true.
+- NO means you believe the answer to the question is negative / the claim is likely false.
+Do not default to NO out of caution. If evidence supports YES, answer YES. Be honest about what the evidence shows.
+Give a thorough, detailed explanation of your reasoning.
+
 Respond with ONLY a strict JSON object. Do NOT use markdown formatting anywhere.
+The "answer" field MUST be exactly the string "YES" or exactly the string "NO" (nothing else).
 {{
-  "answer": "YES" or "NO",
-  "reasoning": "<detailed plain-text explanation, no markdown>"
+  "answer": "YES",
+  "reasoning": "your detailed plain-text explanation here, no markdown"
 }}
 """
 
@@ -436,6 +449,7 @@ def run_orchestrated_phase2(
     q_emb = embed_text(question)
     _debug_log(f"Phase 2 processing: {len(relevant_agents_info)} relevant agents found.")
     triggered_agents: list[dict[str, Any]] = []
+    second_bets: list[dict[str, Any]] = []
     for i, info in enumerate(relevant_agents_info):
         aid = info.get("agent_id")
         _debug_log(f"Triggering agent {i+1}/{len(relevant_agents_info)}: {aid}")
@@ -453,24 +467,19 @@ def run_orchestrated_phase2(
             "agent_name": bet["agent_name"],
             "choice_reasoning": choice_reasoning,
             "answer": bet["answer"],
-            "confidence": bet["confidence"],
-            "analysis": bet["reasoning"],
         })
-
-    relevant_agents_with_rag = [
-        {"agent_id": t["agent_id"], "agent_name": t["agent_name"], "expertise_rationale": t["choice_reasoning"]}
-        for t in triggered_agents
-    ]
-    second_bets = [
-        {"agent_id": t["agent_id"], "agent_name": t["agent_name"], "answer": t["answer"], "confidence": t["confidence"], "reasoning": t["analysis"]}
-        for t in triggered_agents
-    ]
+        second_bets.append({
+            "agent_id": bet["agent_id"],
+            "agent_name": bet["agent_name"],
+            "answer": bet["answer"],
+            "confidence": bet["confidence"],
+            "reasoning": bet["reasoning"],
+        })
 
     return {
         "topic_reasoning": topic_reasoning,
         "context_for_agents": context_for_agents,
         "triggered_agents": triggered_agents,
-        "relevant_agents_with_rag": relevant_agents_with_rag,
         "second_bets": second_bets,
     }
 
@@ -503,22 +512,12 @@ def run_phase2_stream(
         key_facts=key_facts,
         model=model,
     )
-    relevant_agents_with_rag = [
-        {
-            "agent_id": r["agent_id"],
-            "agent_name": (get_agent(r["agent_id"]) or AGENTS[0]).name,
-            "expertise_rationale": r.get("choice_reasoning", ""),
-        }
-        for r in relevant_agents_info
-    ]
-
     q_emb = embed_text(question)
 
     yield {
         "event": "orchestrator_done",
         "topic_reasoning": topic_reasoning,
         "context_for_agents": context_for_agents,
-        "relevant_agents_with_rag": relevant_agents_with_rag,
     }
 
     second_bets: list[dict[str, Any]] = []
@@ -540,15 +539,13 @@ def run_phase2_stream(
                 second_bets.append(bet)
                 yield {"event": "agent_second_bet_done", "bet": bet}
 
-    rationale_by_id = {r["agent_id"]: r.get("expertise_rationale", "") for r in relevant_agents_with_rag}
+    rationale_by_id = {r["agent_id"]: r.get("choice_reasoning", "") for r in relevant_agents_info}
     triggered_agents = [
         {
             "agent_id": b["agent_id"],
             "agent_name": b["agent_name"],
             "choice_reasoning": rationale_by_id.get(b["agent_id"], ""),
             "answer": b["answer"],
-            "confidence": b["confidence"],
-            "analysis": b["reasoning"],
         }
         for b in second_bets
     ]
@@ -556,7 +553,6 @@ def run_phase2_stream(
         "topic_reasoning": topic_reasoning,
         "context_for_agents": context_for_agents,
         "triggered_agents": triggered_agents,
-        "relevant_agents_with_rag": relevant_agents_with_rag,
         "second_bets": second_bets,
     }
     yield {"event": "phase2_complete", "result": result}

@@ -81,19 +81,11 @@ class Phase1Response(BaseModel):
     initial_bets: list[AgentBet]
 
 
-class AgentRagAssignment(BaseModel):
-    agent_id: str
-    agent_name: str
-    expertise_rationale: str  # why this agent was chosen (no "primary" agent; all are equal)
-
-
 class TriggeredAgent(BaseModel):
     agent_id: str
     agent_name: str
     choice_reasoning: str
     answer: str
-    confidence: int
-    analysis: str
 
 
 class OrchestratorResponse(Phase1Response):
@@ -101,7 +93,6 @@ class OrchestratorResponse(Phase1Response):
     topic_reasoning: str = ""
     context_for_agents: str = ""  # single shared context for all triggered agents (from Phase 2 RAG)
     triggered_agents: list[TriggeredAgent] = []
-    relevant_agents_with_rag: list[AgentRagAssignment] = []
     second_bets: list[AgentBet] = []
 
 
@@ -115,7 +106,6 @@ class Phase2Response(Phase1Response):
     topic_reasoning: str = ""
     context_for_agents: str = ""  # single shared context for all triggered agents
     triggered_agents: list[TriggeredAgent] = []
-    relevant_agents_with_rag: list[AgentRagAssignment] = []
     second_bets: list[AgentBet] = []
 
 
