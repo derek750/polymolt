@@ -152,7 +152,7 @@ def phase2(request: Phase2Request):
 def phase2_stream(request: Phase2Request):
     """
     Phase 2 as Server-Sent Events: orchestrator_done, then one agent_second_bet_done per
-    relevant agent (parallel), then deep_analysis_done, then phase2_complete with full result.
+    relevant agent (parallel), then phase2_complete with full result.
     """
     return StreamingResponse(
         phase2_sse_generator(request),

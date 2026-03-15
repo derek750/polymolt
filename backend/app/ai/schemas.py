@@ -106,7 +106,6 @@ class OrchestratorResponse(Phase1Response):
     assigned_agent_id: str | None = None
     assigned_agent_name: str | None = None
     expertise_rationale: str | None = None
-    deep_analysis: str | None = None
 
 
 class Phase2Request(Phase1Response):
@@ -123,7 +122,6 @@ class Phase2Response(Phase1Response):
     expertise_rationale: str = ""
     relevant_agents_with_rag: list[AgentRagAssignment] = []
     second_bets: list[AgentBet] = []  # derived from triggered_agents for compatibility
-    deep_analysis: str = ""
 
 
 # ── RAG Ingestion ──

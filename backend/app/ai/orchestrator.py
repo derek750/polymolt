@@ -9,9 +9,9 @@ Flow
    a. Collects the reasons from all agents.
    b. Uses RAG (news/search) context only; no web scraping.
    c. Asks the LLM to identify which expertise the question falls under and
-      picks the best-fit agent.
-   d. The assigned agent performs a deep analysis using the RAG context +
-      the other agents' reasoning as additional context.
+      picks the best-fit agent(s).
+   d. Each relevant agent runs the pipeline again with orchestrator-assigned
+      RAG context (second bet); results are collected as triggered_agents.
 """
 
 from __future__ import annotations
@@ -311,94 +311,6 @@ def _identify_expertise_and_assign_rag(
     return topic_reasoning, relevant_agents
 
 
-# ── Phase 2d: Deep analysis ─────────────────────────────────────────────
-
-_DEEP_SYSTEM = (
-    "You are {agent_name}. {system_prompt} "
-    "You have been selected as the most qualified analyst for this question."
-)
-
-_DEEP_USER = """\
-A prediction market is evaluating a claim about a Toronto location (e.g., hospital, nursery, attraction) to mitigate asymmetric information:
-
-\"\"\"{question}\"\"\"
-
-Other analysts placed the following bets:
-{other_bets}
-
-Additional context (if any):
-{web_snippets}
-
-{context_block}
-
-Provide a thorough, evidence-based analysis. Consider the other analysts'
-perspectives and the RAG/context above. Conclude with your final assessment
-of whether the answer is YES or NO, and your overall confidence level.
-"""
-
-
-def _parse_agent_analysis(raw_analysis: str) -> tuple[str, str]:
-    """Parse the agent's final deep analysis to extract Answer. UNKNOWN is treated as NO."""
-    answer = "NO"
-    clean_analysis = raw_analysis.strip()
-
-    lines = [line.strip() for line in clean_analysis.split("\n") if line.strip()]
-    if lines:
-        last_line = lines[-1].lower()
-        if "answer: yes" in last_line:
-            answer = "YES"
-        elif "answer: no" in last_line:
-            answer = "NO"
-
-    return answer, clean_analysis
-
-
-def _run_deep_analysis(
-    question: str,
-    agent_id: str,
-    bets: list[dict[str, Any]],
-    web_snippets: list[str],
-    context: str,
-    model: str | None,
-    question_embedding: list[float] | None = None,
-) -> tuple[str, int, str]:
-    """Returns (answer, confidence, analysis_text)."""
-    agent = get_agent(agent_id) or AGENTS[0]
-
-    other_bets = "\n".join(
-        f"- {b['agent_name']}: {b['answer']} (confidence {b['confidence']}%) "
-        f"— {b['reasoning']}"
-        for b in bets
-    )
-    snippets_text = "\n".join(web_snippets) if web_snippets else "(none)"
-    ctx = f"RAG context:\n{context}" if context else "(No RAG context available.)"
-
-    system = _DEEP_SYSTEM.format(agent_name=agent.name, system_prompt=agent.system_prompt)
-    user = _DEEP_USER.format(
-        question=question,
-        other_bets=other_bets,
-        web_snippets=snippets_text,
-        context_block=ctx,
-    )
-    raw = generate(user, system_prompt=system, model=agent.model or model, max_tokens=1024)
-    answer, clean_analysis = _parse_agent_analysis(raw)
-
-    bet_info = get_bet_for_agent(
-        agent,
-        question_prompt=question,
-        response_text=clean_analysis,
-        question_embedding=question_embedding,
-    )
-    confidence = compute_confidence(bet_info)
-
-    if context:
-        header = "🟢 [ORCHESTRATOR: RAG CONTEXT ACTIVE]\n" + "="*40 + "\n"
-    else:
-        header = "🔴 [ORCHESTRATOR: NO RAG CONTEXT FOUND]\n" + "="*40 + "\n"
-    analysis = f"{header}{clean_analysis}"
-    return answer, confidence, analysis
-
-
 def _run_single_agent_second_bet(
     agent_id: str,
     question: str,
@@ -532,29 +444,24 @@ def run_orchestrated_phase2(
     for i, info in enumerate(relevant_agents_info):
         aid = info.get("agent_id")
         _debug_log(f"Triggering agent {i+1}/{len(relevant_agents_info)}: {aid}")
-        reasoning = info.get("choice_reasoning", "")
+        choice_reasoning = info.get("choice_reasoning", "")
         agent_specific_rag = info.get("rag_context_for_agent", "") or rag_context
 
-        agent_obj = get_agent(aid) or AGENTS[0]
-
-        ans, conf, analysis = _run_deep_analysis(
+        bet = _run_single_agent_second_bet(
+            agent_id=aid,
             question=question,
-            agent_id=agent_obj.id,
-            bets=bets,
-            web_snippets=web_snippets,
-            context=agent_specific_rag,
+            rag_context_for_agent=agent_specific_rag,
             model=model,
             question_embedding=q_emb,
         )
-
         triggered_agents.append({
-            "agent_id": agent_obj.id,
-            "agent_name": agent_obj.name,
-            "choice_reasoning": reasoning,
+            "agent_id": bet["agent_id"],
+            "agent_name": bet["agent_name"],
+            "choice_reasoning": choice_reasoning,
             "context": agent_specific_rag,
-            "answer": ans,
-            "confidence": conf,
-            "analysis": analysis,
+            "answer": bet["answer"],
+            "confidence": bet["confidence"],
+            "analysis": bet["reasoning"],
         })
 
     # Legacy / Phase2Response: primary = first triggered agent
@@ -587,7 +494,6 @@ def run_orchestrated_phase2(
         "expertise_rationale": primary["choice_reasoning"],
         "relevant_agents_with_rag": relevant_agents_with_rag,
         "second_bets": second_bets,
-        "deep_analysis": primary["analysis"],
     }
 
 
@@ -602,8 +508,8 @@ def run_phase2_stream(
 ) -> Iterator[dict[str, Any]]:
     """
     Phase 2 with SSE: orchestrator assigns RAG to relevant agents; each makes a second bet (streamed);
-    then assigned agent runs deep analysis; final phase2_complete with full result.
-    Events: orchestrator_done, agent_second_bet_done (per relevant agent), deep_analysis_done, phase2_complete.
+    final phase2_complete with full result.
+    Events: orchestrator_done, agent_second_bet_done (per relevant agent), phase2_complete.
     """
     web_snippets = web_scrape_snippets
     chunks = rag_chunks if rag_chunks is not None else ([s for s in rag_context.split("\n\n") if s.strip()] if rag_context else [])
@@ -659,18 +565,6 @@ def run_phase2_stream(
                 second_bets.append(bet)
                 yield {"event": "agent_second_bet_done", "bet": bet}
 
-    agent_specific_rag = agent_rag_map.get(assigned_id) or rag_context
-    _ans, _conf, analysis = _run_deep_analysis(
-        question=question,
-        agent_id=assigned_id,
-        bets=initial_bets,
-        web_snippets=web_snippets,
-        context=agent_specific_rag,
-        model=model,
-        question_embedding=q_emb,
-    )
-    yield {"event": "deep_analysis_done", "deep_analysis": analysis}
-
     result = {
         "topic_reasoning": topic_reasoning,
         "assigned_agent_id": assigned_agent.id,
@@ -678,7 +572,6 @@ def run_phase2_stream(
         "expertise_rationale": rationale,
         "relevant_agents_with_rag": relevant_agents_with_rag,
         "second_bets": second_bets,
-        "deep_analysis": analysis,
     }
     yield {"event": "phase2_complete", "result": result}
 
@@ -692,8 +585,8 @@ def run_orchestrated_pipeline(
     """
     Full orchestrated pipeline:
     1. All agents place an initial bet.
-    2. Orchestrator collects reasons, web-scrapes, identifies expertise,
-       assigns the best agent for a deep analysis.
+    2. Orchestrator identifies expertise, assigns RAG to relevant agents,
+       and each runs a second bet via the pipeline.
     """
     _debug_log(f"Starting pipeline for question: {question}")
     # Phase 1 — initial bets + RAG (no web scrape)
@@ -703,7 +596,7 @@ def run_orchestrated_pipeline(
     bets = phase1["initial_bets"]
     web_snippets = phase1["web_scrape_snippets"]
 
-    # Phase 2 — expertise selection + RAG assignment + deep analysis
+    # Phase 2 — expertise selection + RAG assignment + second bets
     phase2 = run_orchestrated_phase2(
         question=question,
         initial_bets=bets,
