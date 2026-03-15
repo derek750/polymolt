@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.venv
+venv
+chroma_db/
+*.parquet
+*.ipynb
+.ipynb_checkpoints
+test_out.txt
+scripts/

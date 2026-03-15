@@ -1,20 +1,21 @@
 """
 PolyMolt backend — FastAPI app.
 Routers: /ai (pipeline), /db (database), /market (prediction market).
+Deploys to GCP Cloud Run (reads PORT from env).
 """
 
 import logging
-import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+load_dotenv()
+
+from app.config import ALLOWED_ORIGINS  # noqa: E402 — must be after load_dotenv
 from app.ai.router import router as ai_router
 from app.db.router import router as db_router
 from app.market.router import router as market_router
-
-load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

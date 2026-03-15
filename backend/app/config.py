@@ -28,3 +28,11 @@ ASTRA_DB_ORCHESTRATOR_KEYSPACE: str = os.getenv("ASTRA_DB_ORCHESTRATOR_KEYSPACE"
 # Upstash Redis
 UPSTASH_REDIS_REST_URL: str = os.getenv("UPSTASH_REDIS_REST_URL", "")
 UPSTASH_REDIS_REST_TOKEN: str = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
+
+# Deployment
+PORT: int = int(os.getenv("PORT", "8080"))
+ALLOWED_ORIGINS: list[str] = [
+    o.strip()
+    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    if o.strip()
+]
