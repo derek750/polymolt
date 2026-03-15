@@ -169,7 +169,7 @@ def orchestrate(request: OrchestrateRequest):
     Full orchestrated pipeline in one call:
     1. All agents place an initial bet (phase1, no year filtering).
     2. Orchestrator identifies expertise, assigns agent(s), runs deep analysis (phase2, year-filtered).
-    Saves the full response (question, initial_bets, triggered_agents, deep_analysis, etc.) to Db2.
+    Saves the full response (question, initial_bets, triggered_agents, deep_analysis, etc.) to Supabase.
     """
     result = run_orchestrated_pipeline(
         question=request.question,
@@ -180,7 +180,7 @@ def orchestrate(request: OrchestrateRequest):
         year=request.year,
     )
     try:
-        from app.db.db2 import save_orchestrate_response
+        from app.db.supabase import save_orchestrate_response
         save_orchestrate_response(
             question=request.question,
             location=(request.location or "").strip(),
@@ -190,7 +190,7 @@ def orchestrate(request: OrchestrateRequest):
         )
     except Exception as e:
         import logging
-        logging.getLogger(__name__).warning("Failed to save orchestrate response to Db2: %s", e)
+        logging.getLogger(__name__).warning("Failed to save orchestrate response to Supabase: %s", e)
     return Phase2Response(**result)
 
 

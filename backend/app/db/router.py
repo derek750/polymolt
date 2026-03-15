@@ -1,12 +1,12 @@
 """
-Database router — IBM Db2-backed endpoints for persisting questions and stakeholder AI perspectives.
+Database router — Supabase-backed endpoints for persisting questions and stakeholder AI perspectives.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from app.db.db2 import (
+from app.db.supabase import (
     StakeholderPerspective,
     StakeholderResponseRow,
     QuestionRow,
@@ -35,32 +35,32 @@ router = APIRouter(prefix="/db", tags=["database"])
 @router.get("/health")
 def db_health():
     """
-    Health check for the Db2 integration. Tests actual connection.
+    Health check for the Supabase integration. Tests actual connection.
     """
-    from app.db.db2 import db2_connection, DB2_DSN
-    
-    if not DB2_DSN:
+    import os
+
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url or not key:
         return {
             "status": "error",
-            "message": "DB2_DSN environment variable is not set.",
+            "message": "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set.",
             "available": False,
         }
-    
+
     try:
-        with db2_connection() as conn:
-            # Test query
-            import ibm_db
-            stmt = ibm_db.exec_immediate(conn, "SELECT 1 FROM SYSIBM.SYSDUMMY1")
-            ibm_db.fetch_row(stmt)
+        from app.db.supabase import get_supabase
+        sb = get_supabase()
+        sb.table("questions").select("id").limit(1).execute()
         return {
             "status": "ok",
-            "message": "Db2 connection successful",
+            "message": "Supabase connection successful",
             "available": True,
         }
     except Exception as exc:
         return {
             "status": "error",
-            "message": f"Db2 connection failed: {str(exc)}",
+            "message": f"Supabase connection failed: {str(exc)}",
             "available": False,
         }
 
@@ -68,13 +68,11 @@ def db_health():
 @router.post("/questions", response_model=SaveQuestionResponse)
 def save_question(request: SaveQuestionRequest) -> SaveQuestionResponse:
     """
-    Save a question and all stakeholder AI perspectives to IBM Db2.
+    Save a question and all stakeholder AI perspectives to Supabase.
 
     Call this from your question pipeline once you have:
       - the final location label
       - the full set of stakeholder AIs and their yes/no answers
-    
-    If DB2 is unavailable, logs a warning but does not fail the orchestration.
     """
     try:
         perspectives = [
@@ -96,11 +94,10 @@ def save_question(request: SaveQuestionRequest) -> SaveQuestionResponse:
             location=request.location,
             perspectives=perspectives,
         )
-    except Exception as exc:  # Log but don't crash - DB2 is optional
+    except Exception as exc:
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning(f"Failed to save question to DB2 (DB2 may be unavailable): {exc}")
-        # Return a dummy ID - the orchestration should continue even if DB2 fails
+        logger.warning(f"Failed to save question to Supabase: {exc}")
         return SaveQuestionResponse(question_id=-1)
 
     return SaveQuestionResponse(question_id=question_id)
@@ -129,16 +126,15 @@ def create_question_basic(request: CreateQuestionOnlyRequest) -> SaveQuestionRes
 def list_questions(limit: int = 50) -> QuestionListResponse:
     """
     List recent questions with simple yes/no counts.
-    
-    Returns empty list if DB2 is unavailable (graceful degradation).
+
+    Returns empty list if Supabase is unavailable (graceful degradation).
     """
     try:
         rows = list_recent_questions(limit=limit)
     except Exception as exc:
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning(f"DB2 unavailable, returning empty list: {exc}")
-        # Graceful degradation: return empty list instead of crashing
+        logger.warning(f"Supabase unavailable, returning empty list: {exc}")
         return QuestionListResponse(questions=[])
 
     questions = [
@@ -167,10 +163,9 @@ def get_question(question_id: int) -> QuestionDetailResponse:
     except Exception as exc:
         import logging
         logger = logging.getLogger(__name__)
-        logger.warning(f"DB2 unavailable for question {question_id}: {exc}")
+        logger.warning(f"Supabase unavailable for question {question_id}: {exc}")
         raise HTTPException(status_code=503, detail=f"Database unavailable: {str(exc)}") from exc
 
-    # Compute aggregated counts to reuse QuestionSummaryOut
     yes_count = sum(1 for r in resp_rows if r.answer.upper() == "YES")
     no_count = sum(1 for r in resp_rows if r.answer.upper() == "NO")
 
@@ -234,4 +229,3 @@ def get_question_orchestrate(question_id: int) -> OrchestrateRunOut:
         full_response=full,
         created_at=row.created_at or "",
     )
-

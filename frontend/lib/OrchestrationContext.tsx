@@ -58,7 +58,7 @@ export function OrchestrationProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<OrchestrationState>(INITIAL_STATE)
   const abortRef = useRef<AbortController | null>(null)
   const tradeIdRef = useRef(0)
-  const allTradesRef = useRef<TradeEntry[]>([]) // Track trades outside React state for DB2 save
+  const allTradesRef = useRef<TradeEntry[]>([]) // Track trades outside React state for DB save
 
   // Place a YES/NO order on the LMSR market and return price before/after
   async function placeOrder(
@@ -107,7 +107,7 @@ export function OrchestrationProvider({ children }: { children: ReactNode }) {
       evidenceTitles: [],
     }
 
-    allTradesRef.current.push(trade) // Track for DB2 save
+    allTradesRef.current.push(trade) // Track for DB save
 
     setState((prev) => ({
       ...prev,
@@ -286,7 +286,7 @@ export function OrchestrationProvider({ children }: { children: ReactNode }) {
           phaseLabel: `Analysis complete across ${YEARS.length} years.`,
         }))
 
-        // Save question and all trades to DB2
+        // Save question and all trades to Supabase
         try {
           const trades = allTradesRef.current
           const stakeholders = trades.map((trade) => ({
@@ -310,13 +310,13 @@ export function OrchestrationProvider({ children }: { children: ReactNode }) {
               }),
             })
             if (!saveRes.ok) {
-              console.warn("DB2 save returned", saveRes.status, await saveRes.text().catch(() => ""))
+              console.warn("Supabase save returned", saveRes.status, await saveRes.text().catch(() => ""))
             }
           } else {
-            console.warn("No trades to save to DB2")
+            console.warn("No trades to save")
           }
         } catch (e) {
-          console.warn("Failed to save question to DB2:", e)
+          console.warn("Failed to save question to Supabase:", e)
         }
       } catch (e) {
         if (ac.signal.aborted) return
