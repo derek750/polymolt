@@ -9,6 +9,10 @@ interface Props {
 }
 
 export function RegionSelector({ regions, selectedRegion, onSelect }: Props) {
+  if (regions.length === 0) {
+    return null
+  }
+
   return (
     <select
       value={selectedRegion}
@@ -20,9 +24,6 @@ export function RegionSelector({ regions, selectedRegion, onSelect }: Props) {
           {region.name}
         </option>
       ))}
-      {regions.length === 0 && (
-        <option value={selectedRegion}>Loading…</option>
-      )}
     </select>
   )
 }
