@@ -183,6 +183,9 @@ def _execute_many(
 #       assigned_agent_id VARCHAR(100),
 #       expertise_rationale CLOB,
 #       rag_context CLOB,
+#       context_for_agents CLOB,
+#       year INTEGER,
+#       model VARCHAR(100),
 #       full_response CLOB,
 #       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 #       CONSTRAINT fk_orchestrate_question
@@ -440,34 +443,45 @@ def get_question_with_responses(
         return question, responses
 
 
-def save_orchestrate_response(question: str, location: str, response: dict[str, Any]) -> int:
+def save_orchestrate_response(
+    question: str,
+    location: str,
+    response: dict[str, Any],
+    year: int | None = None,
+    model: str | None = None,
+) -> int:
     """
     Save a full /ai/orchestrate response to Db2 under one question.
 
-    Creates: one question row, one orchestrate_runs row (topic_reasoning, deep_analysis,
-    assigned_agent_id, expertise_rationale, rag_context, full_response JSON), and
-    stakeholder_responses for each initial_bet (phase='initial_bet') and each
-    triggered_agent (phase='triggered' with choice_reasoning, context, analysis in raw_payload).
+    Creates:
+    - one ``questions`` row (question_text, location)
+    - one ``orchestrate_runs`` row (topic_reasoning, context_for_agents,
+      year, model, full_response JSON, etc.)
+    - ``stakeholder_responses`` rows:
+        phase='initial_bet'  — every agent's first bet (answer, confidence, reasoning)
+        phase='triggered'    — orchestrator's agent selection (choice_reasoning only)
+        phase='second_bet'   — triggered agents' second bet (answer, confidence, reasoning,
+                               plus choice_reasoning in raw_payload)
 
     Returns the created question_id.
     """
     with db2_connection() as conn:
         question_id = _insert_question(conn, question, location)
 
-        # Insert orchestrate_runs row (full run metadata + full JSON)
         topic_reasoning = response.get("topic_reasoning") or ""
         deep_analysis = response.get("deep_analysis") or ""
         assigned_agent_id = response.get("assigned_agent_id") or ""
         expertise_rationale = response.get("expertise_rationale") or ""
-        rag_context = response.get("rag_context") or ""
+        context_for_agents = response.get("context_for_agents") or ""
         full_response = json.dumps(response)
 
         insert_run_sql = """
             INSERT INTO orchestrate_runs (
                 question_id, topic_reasoning, deep_analysis,
-                assigned_agent_id, expertise_rationale, rag_context, full_response
+                assigned_agent_id, expertise_rationale, rag_context,
+                context_for_agents, year, model, full_response
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         stmt = ibm_db.prepare(conn, insert_run_sql)
         ibm_db.execute(
@@ -478,12 +492,15 @@ def save_orchestrate_response(question: str, location: str, response: dict[str, 
                 deep_analysis,
                 assigned_agent_id[:100] if assigned_agent_id else None,
                 expertise_rationale,
-                rag_context,
+                context_for_agents,
+                context_for_agents,
+                year,
+                (model or "")[:100] if model else None,
                 full_response,
             ),
         )
 
-        # Insert initial_bets as stakeholder_responses (phase='initial_bet')
+        # --- initial_bets → phase='initial_bet' ---
         initial_bets = response.get("initial_bets") or []
         for bet in initial_bets:
             answer = (bet.get("answer") or "UNKNOWN").strip().upper()
@@ -502,7 +519,7 @@ def save_orchestrate_response(question: str, location: str, response: dict[str, 
                 raw_payload=None,
             )
 
-        # Insert triggered_agents as stakeholder_responses (phase='triggered')
+        # --- triggered_agents → phase='triggered' (selection metadata only) ---
         triggered = response.get("triggered_agents") or []
         for t in triggered:
             answer = (t.get("answer") or "UNKNOWN").strip().upper()
@@ -510,8 +527,6 @@ def save_orchestrate_response(question: str, location: str, response: dict[str, 
                 answer = "NO"
             raw = {
                 "choice_reasoning": t.get("choice_reasoning") or "",
-                "context": t.get("context") or "",
-                "analysis": t.get("analysis") or "",
             }
             _insert_stakeholder_response(
                 conn,
@@ -521,16 +536,45 @@ def save_orchestrate_response(question: str, location: str, response: dict[str, 
                 stakeholder_role=t.get("agent_name") or "",
                 ai_agent_id=t.get("agent_id") or "",
                 answer=answer,
-                confidence=t.get("confidence"),
-                reasoning=(t.get("analysis") or "")[:32700],
+                confidence=None,
+                reasoning=None,
+                raw_payload=raw,
+            )
+
+        # --- second_bets → phase='second_bet' (full confidence + reasoning) ---
+        # Build lookup of choice_reasoning from triggered_agents
+        choice_reasoning_by_id = {
+            t.get("agent_id"): t.get("choice_reasoning", "")
+            for t in triggered
+        }
+        second_bets = response.get("second_bets") or []
+        for sb in second_bets:
+            answer = (sb.get("answer") or "UNKNOWN").strip().upper()
+            if answer not in ("YES", "NO"):
+                answer = "NO"
+            aid = sb.get("agent_id") or ""
+            raw = {
+                "choice_reasoning": choice_reasoning_by_id.get(aid, ""),
+            }
+            _insert_stakeholder_response(
+                conn,
+                question_id,
+                phase="second_bet",
+                stakeholder_id=aid,
+                stakeholder_role=sb.get("agent_name") or "",
+                ai_agent_id=aid,
+                answer=answer,
+                confidence=sb.get("confidence"),
+                reasoning=(sb.get("reasoning") or "")[:32700],
                 raw_payload=raw,
             )
 
         logger.info(
-            "Saved orchestrate response for question %s: %d initial_bets, %d triggered_agents",
+            "Saved orchestrate response for question %s: %d initial_bets, %d triggered, %d second_bets",
             question_id,
             len(initial_bets),
             len(triggered),
+            len(second_bets),
         )
         _invalidate_db_cache()
         return question_id
@@ -586,6 +630,9 @@ class OrchestrateRunRow:
     assigned_agent_id: str | None
     expertise_rationale: str | None
     rag_context: str | None
+    context_for_agents: str | None
+    year: int | None
+    model: str | None
     full_response: str | None
     created_at: str
 
@@ -605,6 +652,7 @@ def get_orchestrate_run(question_id: int) -> OrchestrateRunRow | None:
                    COALESCE(topic_reasoning, '') AS topic_reasoning,
                    COALESCE(deep_analysis, '') AS deep_analysis,
                    assigned_agent_id, expertise_rationale, rag_context,
+                   context_for_agents, year, model,
                    full_response,
                    CHAR(created_at) AS created_at
             FROM orchestrate_runs
@@ -618,6 +666,7 @@ def get_orchestrate_run(question_id: int) -> OrchestrateRunRow | None:
         if not row:
             cache_set(NS_DB, *cache_key_parts, value="__none__", ttl=TTL_DB_READ)
             return None
+        year_val = row.get("YEAR")
         result = OrchestrateRunRow(
             id=int(row["ID"]),
             question_id=int(row["QUESTION_ID"]),
@@ -626,6 +675,9 @@ def get_orchestrate_run(question_id: int) -> OrchestrateRunRow | None:
             assigned_agent_id=str(row["ASSIGNED_AGENT_ID"]) if row.get("ASSIGNED_AGENT_ID") else None,
             expertise_rationale=str(row["EXPERTISE_RATIONALE"]) if row.get("EXPERTISE_RATIONALE") else None,
             rag_context=str(row["RAG_CONTEXT"]) if row.get("RAG_CONTEXT") else None,
+            context_for_agents=str(row["CONTEXT_FOR_AGENTS"]) if row.get("CONTEXT_FOR_AGENTS") else None,
+            year=int(year_val) if year_val is not None else None,
+            model=str(row["MODEL"]) if row.get("MODEL") else None,
             full_response=str(row["FULL_RESPONSE"]) if row.get("FULL_RESPONSE") else None,
             created_at=str(row["CREATED_AT"]),
         )
@@ -633,7 +685,9 @@ def get_orchestrate_run(question_id: int) -> OrchestrateRunRow | None:
             "id": result.id, "question_id": result.question_id,
             "topic_reasoning": result.topic_reasoning, "deep_analysis": result.deep_analysis,
             "assigned_agent_id": result.assigned_agent_id, "expertise_rationale": result.expertise_rationale,
-            "rag_context": result.rag_context, "full_response": result.full_response,
+            "rag_context": result.rag_context, "context_for_agents": result.context_for_agents,
+            "year": result.year, "model": result.model,
+            "full_response": result.full_response,
             "created_at": result.created_at,
         }
         cache_set(NS_DB, *cache_key_parts, value=serializable, ttl=TTL_DB_READ)

@@ -183,8 +183,10 @@ def orchestrate(request: OrchestrateRequest):
         from app.db.db2 import save_orchestrate_response
         save_orchestrate_response(
             question=request.question,
-            location="",
+            location=(request.location or "").strip(),
             response=result,
+            year=request.year,
+            model=request.model,
         )
     except Exception as e:
         import logging

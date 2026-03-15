@@ -517,6 +517,7 @@ def run_orchestrated_phase2(
     return {
         "topic_reasoning": topic_reasoning,
         "context_for_agents": context_for_agents,
+        "key_facts": key_facts,
         "triggered_agents": triggered_agents,
         "second_bets": second_bets,
     }

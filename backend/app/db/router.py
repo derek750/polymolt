@@ -192,6 +192,9 @@ def get_question_orchestrate(question_id: int) -> OrchestrateRunOut:
         assigned_agent_id=row.assigned_agent_id,
         expertise_rationale=row.expertise_rationale,
         rag_context=row.rag_context,
+        context_for_agents=row.context_for_agents,
+        year=row.year,
+        model=row.model,
         full_response=full,
         created_at=row.created_at or "",
     )

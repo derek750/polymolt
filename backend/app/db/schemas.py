@@ -92,6 +92,9 @@ class OrchestrateRunOut(BaseModel):
     assigned_agent_id: str | None = None
     expertise_rationale: str | None = None
     rag_context: str | None = None
+    context_for_agents: str | None = None
+    year: int | None = None
+    model: str | None = None
     full_response: dict[str, Any] | None = None
     created_at: str = ""
 

@@ -104,6 +104,9 @@ def main():
                 assigned_agent_id VARCHAR(100),
                 expertise_rationale CLOB,
                 rag_context CLOB,
+                context_for_agents CLOB,
+                year INTEGER,
+                model VARCHAR(100),
                 full_response CLOB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_orchestrate_question
@@ -113,6 +116,17 @@ def main():
         """, ignore_exists=True)
     except Exception as e:
         print("orchestrate_runs:", e)
+
+    # 5. Add new columns to orchestrate_runs if table already exists
+    for col_sql in [
+        "ALTER TABLE orchestrate_runs ADD context_for_agents CLOB",
+        "ALTER TABLE orchestrate_runs ADD year INTEGER",
+        "ALTER TABLE orchestrate_runs ADD model VARCHAR(100)",
+    ]:
+        try:
+            run(col_sql, ignore_exists=True)
+        except Exception:
+            pass
 
     db2.ibm_db.commit(conn)
     db2.ibm_db.close(conn)
