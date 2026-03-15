@@ -48,7 +48,7 @@ export function MarketPanel({ market, region, trades }: Props) {
             <span className="text-xs text-neutral-400">trades</span>
           </div>
 
-          <div className="h-[360px]">
+          <div className="flex-1 min-h-[360px]">
             <ProbabilityChart
               priceHistory={market.priceHistory}
               trades={trades}
@@ -67,9 +67,9 @@ export function MarketPanel({ market, region, trades }: Props) {
           </div>
         </>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 flex-1 min-h-0">
           <div className="h-12 w-32 rounded bg-neutral-100 animate-pulse" />
-          <div className="h-[360px] rounded bg-neutral-50 animate-pulse" />
+          <div className="flex-1 min-h-[360px] rounded bg-neutral-50 animate-pulse" />
         </div>
       )}
     </div>

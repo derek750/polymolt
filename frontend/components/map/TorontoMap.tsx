@@ -187,16 +187,56 @@ export const TorontoMap = forwardRef<TorontoMapRef, TorontoMapProps>(function To
       return
     }
     if (pulseMarkerRef.current) pulseMarkerRef.current.remove()
-    const el = document.createElement("div")
-    el.className = "pulse-ring"
-    el.style.width = "24px"
-    el.style.height = "24px"
-    el.style.borderRadius = "50%"
-    el.style.border = "2px solid rgba(59, 130, 246, 0.8)"
-    el.style.background = "rgba(59, 130, 246, 0.2)"
-    el.style.animation = "pulse-ring 1.2s ease-out infinite"
-    el.style.pointerEvents = "none"
-    const marker = new mapboxgl.Marker({ element: el })
+
+    // Container for stacked glow layers
+    const container = document.createElement("div")
+    container.style.position = "relative"
+    container.style.width = "60px"
+    container.style.height = "60px"
+    container.style.pointerEvents = "none"
+
+    // Outer expanding pulse ring
+    const ring = document.createElement("div")
+    ring.style.position = "absolute"
+    ring.style.inset = "0"
+    ring.style.borderRadius = "50%"
+    ring.style.border = "2px solid rgba(59, 130, 246, 0.6)"
+    ring.style.animation = "pulse-ring 1.5s ease-out infinite"
+    container.appendChild(ring)
+
+    // Second pulse ring (offset timing)
+    const ring2 = document.createElement("div")
+    ring2.style.position = "absolute"
+    ring2.style.inset = "0"
+    ring2.style.borderRadius = "50%"
+    ring2.style.border = "2px solid rgba(59, 130, 246, 0.4)"
+    ring2.style.animation = "pulse-ring 1.5s ease-out infinite"
+    ring2.style.animationDelay = "0.5s"
+    container.appendChild(ring2)
+
+    // Static glow halo
+    const glow = document.createElement("div")
+    glow.style.position = "absolute"
+    glow.style.inset = "10px"
+    glow.style.borderRadius = "50%"
+    glow.style.background = "rgba(59, 130, 246, 0.25)"
+    glow.style.boxShadow = "0 0 20px 8px rgba(59, 130, 246, 0.35), 0 0 40px 16px rgba(59, 130, 246, 0.15)"
+    container.appendChild(glow)
+
+    // Center dot
+    const dot = document.createElement("div")
+    dot.style.position = "absolute"
+    dot.style.width = "12px"
+    dot.style.height = "12px"
+    dot.style.left = "50%"
+    dot.style.top = "50%"
+    dot.style.transform = "translate(-50%, -50%)"
+    dot.style.borderRadius = "50%"
+    dot.style.background = "rgba(59, 130, 246, 0.9)"
+    dot.style.boxShadow = "0 0 8px 2px rgba(59, 130, 246, 0.6)"
+    container.appendChild(dot)
+
+    const marker = new mapboxgl.Marker({ element: container, anchor: "center" })
       .setLngLat(pulseCoordinates)
       .addTo(map)
     pulseMarkerRef.current = marker

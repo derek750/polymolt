@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { Region } from "@/types/market"
 import { ConnectionStatus } from "@/lib/useMarket"
 import { RegionSelector } from "./RegionSelector"
@@ -29,7 +30,29 @@ export function Header({
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-3 bg-white border-b border-neutral-200">
       <div className="flex items-center gap-3">
-        <span className="font-bold text-neutral-900 text-lg tracking-tight">polymolt</span>
+        <Link href="/dashboard" className="font-bold text-neutral-900 text-lg tracking-tight hover:opacity-70 transition-opacity">
+          polymolt
+        </Link>
+        <nav className="flex items-center gap-1 ml-2">
+          <Link
+            href="/dashboard"
+            className="px-3 py-1.5 text-xs text-neutral-500 rounded hover:text-neutral-700 transition-colors"
+          >
+            Dashboard
+          </Link>
+          <Link
+            href="/agents"
+            className="px-3 py-1.5 text-xs text-neutral-500 rounded hover:text-neutral-700 transition-colors"
+          >
+            Agents
+          </Link>
+          <Link
+            href="/map"
+            className="px-3 py-1.5 text-xs text-neutral-500 rounded hover:text-neutral-700 transition-colors"
+          >
+            Map
+          </Link>
+        </nav>
       </div>
 
       <div className="flex items-center gap-3">
