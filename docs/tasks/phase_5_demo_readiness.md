@@ -14,7 +14,7 @@ The app should be stable, self-contained, and presentable in a hackathon demo.
 
 ### D5.2 — Auto-Start
 - [ ] Default region (Scandinavia) loads on app open
-- [ ] Market starts trading within 3 seconds of WebSocket connect
+- [ ] Market starts trading within 3 seconds of SSE connect
 - [ ] No manual "Start" button required
 
 ### D5.3 — Region Switching
@@ -26,8 +26,8 @@ The app should be stable, self-contained, and presentable in a hackathon demo.
 
 ### D5.4 — Stability
 - [ ] No unhandled exceptions in backend
-- [ ] WebSocket reconnects automatically if disconnected
-- [ ] Backend handles multiple concurrent WebSocket connections gracefully
+- [ ] SSE reconnects automatically if disconnected
+- [ ] Backend handles multiple concurrent SSE connections gracefully
 - [ ] Market loop does not crash on edge cases (empty evidence, no trades)
 
 ### D5.5 — Documentation

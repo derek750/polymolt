@@ -5,7 +5,6 @@ import { MarketState, Region } from "@/types/market"
 import { Agent } from "@/types/agent"
 import { TradeEntry } from "@/types/trade"
 
-const WS_BASE = "ws://localhost:8000"
 const API_BASE = "http://localhost:8000"
 const MAX_TRADES = 150
 const MAX_BELIEF_HISTORY = 50
@@ -32,7 +31,7 @@ export function useMarket(defaultRegion = "scandinavia"): UseMarketReturn {
   const [selectedRegion, setSelectedRegion] = useState(defaultRegion)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting")
 
-  const wsRef = useRef<WebSocket | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const currentRegionRef = useRef(defaultRegion)
   const beliefHistoryRef = useRef<Record<string, number[]>>({})
@@ -54,35 +53,34 @@ export function useMarket(defaultRegion = "scandinavia"): UseMarketReturn {
   }, [])
 
   const connect = useCallback((regionId: string) => {
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
     }
 
     setConnectionStatus("connecting")
-    const ws = new WebSocket(`${WS_BASE}/ws/${regionId}`)
-    wsRef.current = ws
+    const es = new EventSource(`${API_BASE}/market/${regionId}/stream`)
+    eventSourceRef.current = es
 
-    ws.onopen = () => {
+    es.onopen = () => {
       setConnectionStatus("connected")
     }
 
-    ws.onmessage = (event) => {
+    es.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data)
         handleMessage(msg)
       } catch (e) {
-        console.error("WS parse error", e)
+        console.error("SSE parse error", e)
       }
     }
 
-    ws.onerror = () => {
-      setConnectionStatus("error")
-    }
-
-    ws.onclose = () => {
+    es.onerror = () => {
       setConnectionStatus("disconnected")
-      // Auto-reconnect after 3s
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
       reconnectTimer.current = setTimeout(() => {
         connect(currentRegionRef.current)
@@ -132,10 +130,6 @@ export function useMarket(defaultRegion = "scandinavia"): UseMarketReturn {
         break
       }
 
-      case "ping":
-        wsRef.current?.send(JSON.stringify({ type: "pong" }))
-        break
-
       default:
         break
     }
@@ -146,7 +140,7 @@ export function useMarket(defaultRegion = "scandinavia"): UseMarketReturn {
     connect(defaultRegion)
     return () => {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
-      if (wsRef.current) wsRef.current.close()
+      if (eventSourceRef.current) eventSourceRef.current.close()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -155,20 +149,23 @@ export function useMarket(defaultRegion = "scandinavia"): UseMarketReturn {
     setSelectedRegion(regionId)
     setTrades([])
     setMarket(null)
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "change_region", regionId }))
-    } else {
-      connect(regionId)
-    }
+    connect(regionId)
   }, [connect])
 
-  const resetMarket = useCallback(() => {
+  const resetMarket = useCallback(async () => {
     setTrades([])
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "reset" }))
+    const regionId = currentRegionRef.current
+    try {
+      await fetch(`${API_BASE}/market/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ market_id: regionId }),
+      })
+      connect(regionId)
+    } catch (e) {
+      console.error("Reset request failed", e)
     }
-  }, [])
+  }, [connect])
 
   const shockMarket = useCallback(async (type: "negative" | "positive") => {
     const regionId = currentRegionRef.current

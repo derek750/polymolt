@@ -1,7 +1,7 @@
 <div align="center">
   <img src="docs/logo.png" alt="Polymolt" width="200" />
   <h1>Polymolt</h1>
-  <p>AI-powered prediction market where specialized agents bet on real-world claims<br>Multi-agent orchestration with RAG retrieval, LMSR pricing, and live WebSocket trading</p>
+  <p>AI-powered prediction market where specialized agents bet on real-world claims<br>Multi-agent orchestration with RAG retrieval, LMSR pricing, and live Server-Sent Events (SSE) streaming</p>
 </div>  
 
 ---
@@ -20,7 +20,7 @@ Polymolt combines RAG pipelines, LMSR market mechanics, and multi-agent orchestr
 - **AI prediction market** with LMSR scoring to derive fair value from agent trades
 - **Specialized agents** with unique expertise: healthcare, finance, location analysis, deep reasoning
 - **RAG-powered evidence retrieval** from Astra DB vector stores before each decision
-- **Real-time WebSocket streaming** for live market updates on every agent trade
+- **Real-time Server-Sent Events (SSE)** for live market updates on every agent trade
 - **Interactive map**: click any Toronto location to trigger agent evaluation
 - **Live dashboard** with probability charts, trade feeds, and agent belief tracking
 - **Multi-agent orchestration** routing questions to the most relevant domain specialists
@@ -35,7 +35,7 @@ Polymolt combines RAG pipelines, LMSR market mechanics, and multi-agent orchestr
 User Question → RAG Retrieval (Astra DB) → Agent Reasoning (Gemini/OpenAI) → LMSR Bet Sizing → Market Price Update → Frontend Dashboard
 
 **Market Engine**  
-Agent Belief → Confidence Scoring → Bet Size Calculation → LMSR Cost Function → Price History Update → WebSocket Broadcast
+Agent Belief → Confidence Scoring → Bet Size Calculation → LMSR Cost Function → Price History Update → SSE broadcast
 
 **Orchestration Pipeline**  
 Question Intake → Domain Classification → Agent Selection → Parallel RAG + Reasoning → Bet Collection → Fair Value Computation
@@ -51,11 +51,11 @@ Question Intake → Domain Classification → Agent Selection → Parallel RAG +
 | Category | Technologies |
 |---------|--------------|
 | AI & ML | OpenAI GPT, Google Gemini, Langflow |
-| Backend | Python, FastAPI, WebSockets, Uvicorn |
+| Backend | Python, FastAPI, SSE (Server-Sent Events), Uvicorn |
 | Frontend | Next.js, React, TypeScript, Tailwind CSS |
 | Database | Astra DB (Vector DB), IBM DB2, Langflow |
 | Visualization | Mapbox GL, Recharts, COBE Globe |
-| Communication | WebSockets, REST API |
+| Communication | Server-Sent Events (SSE), REST API |
 
 ---
 
@@ -67,7 +67,7 @@ Question Intake → Domain Classification → Agent Selection → Parallel RAG +
 4. Agents reason independently using their specialized system prompts.
 5. Agents place YES/NO bets weighted by confidence and domain relevance.
 6. LMSR engine computes the fair probability from all agent bets.
-7. Market price updates in real time via WebSocket to the dashboard.
+7. Market price updates in real time via SSE to the dashboard.
 8. Trade feed shows each agent's reasoning, direction, and price impact.
 9. Users can inject shock events to test how agents respond under pressure.
 

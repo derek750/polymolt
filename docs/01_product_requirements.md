@@ -51,8 +51,8 @@ Clicking an agent card opens a drawer/panel showing:
 - Belief evolution chart (if feasible in Phase 1, otherwise Phase 4)
 
 ### Real-Time Updates
-- WebSocket connection from frontend to backend
-- Backend broadcasts after every trade
+- Server-Sent Events (SSE) connection from frontend to backend
+- Backend streams market updates to frontend
 - Frontend receives and renders without full page reload
 - Trade feed auto-scrolls to latest
 
@@ -68,7 +68,7 @@ Each seeded region has:
 
 ### Performance
 - Trade loop runs every 2–4 seconds per agent (configurable)
-- WebSocket latency < 100ms on local
+- SSE latency < 100ms on local
 - Chart renders smoothly up to 500 data points
 
 ### Code Quality

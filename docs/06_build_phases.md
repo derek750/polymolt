@@ -5,12 +5,12 @@
 
 Deliverables:
 - Next.js frontend scaffold with Tailwind
-- FastAPI backend with WebSocket support
+- FastAPI backend with Server-Sent Events (SSE) support
 - 9 agents defined with seeded behavior traits
 - 3 seeded demo regions with evidence
 - LMSR market maker
 - Simulation loop running in background task
-- WebSocket broadcast on every trade
+- SSE stream for live market updates
 - Frontend: probability display, live chart, trade feed, agent grid, agent detail drawer
 - App starts and runs without errors
 

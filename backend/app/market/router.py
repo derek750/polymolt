@@ -1,17 +1,21 @@
 """REST router for the LMSR YES/NO prediction market.
 
 Endpoints:
-    GET  /market/state   — current market snapshot
-    POST /market/order   — place a dollar-denominated YES/NO order
-    POST /market/reset   — reset market to initial state
+    GET  /market/state        — current market snapshot
+    GET  /market/{market_id}/stream — SSE stream of market updates
+    POST /market/order        — place a dollar-denominated YES/NO order
+    POST /market/reset        — reset market to initial state
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from typing import Optional
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.market.state import get_market, reset_market, apply_order
@@ -45,6 +49,39 @@ class ResetRequest(BaseModel):
 def market_state(market_id: str | None = None):
     """Return the current LMSR market snapshot."""
     return get_market(market_id).snapshot()
+
+
+@router.get("/{market_id}/stream")
+async def market_stream(market_id: str):
+    """Server-Sent Events stream for live market updates. Sends initial state, then keepalive."""
+
+    async def event_stream():
+        market = get_market(market_id)
+        snap = market.snapshot()
+        payload = {
+            "type": "market_reset",
+            "data": {
+                "regionId": snap["market_id"],
+                "question": snap["question"],
+                "currentPrice": snap["price_yes"],
+                "priceHistory": snap.get("price_history", []),
+                "roundNumber": 0,
+                "isRunning": False,
+                "tradeCount": snap.get("trade_count", 0),
+                "agents": [],
+                "recentTrades": [],
+            },
+        }
+        yield f"data: {json.dumps(payload)}\n\n"
+        while True:
+            await asyncio.sleep(30)
+            yield ": keepalive\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
 
 
 @router.post("/order")

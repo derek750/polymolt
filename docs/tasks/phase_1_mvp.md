@@ -30,7 +30,7 @@
 - [ ] Simulation loop: shuffle agents → form beliefs → compute trades → apply LMSR → log → broadcast
 
 ### B1.6 — API
-- [ ] Create `backend/app/api/ws.py` — WebSocket endpoint `/ws/{region_id}`
+- [ ] Create SSE stream endpoint `GET /market/{region_id}/stream` for live market updates
 - [ ] Create `backend/app/api/regions.py` — REST GET `/regions`
 - [ ] Create `backend/app/api/market.py` — REST GET `/market/{region_id}`
 - [ ] Register all routers in `main.py`
@@ -50,10 +50,10 @@
 - [ ] Create `frontend/src/types/trade.ts`
 - [ ] Create `frontend/src/types/evidence.ts`
 
-### F1.3 — WebSocket hook
-- [ ] Create `frontend/src/lib/useMarket.ts` — WebSocket hook
+### F1.3 — SSE hook
+- [ ] Create `frontend/src/lib/useMarket.ts` — SSE (EventSource) hook
 - [ ] Handle: connect, disconnect, reconnect
-- [ ] Parse message types: market_update, trade, agent_update, market_reset
+- [ ] Parse event types: market_update, trade, agent_update, market_reset
 
 ### F1.4 — Components
 - [ ] `Header.tsx` with region selector
@@ -75,7 +75,7 @@
 
 - [ ] Backend starts without errors: `uvicorn main:app --reload --port 8000`
 - [ ] Frontend starts without errors: `npm run dev`
-- [ ] WebSocket connects successfully
+- [ ] SSE stream connects successfully
 - [ ] Market begins updating within 3 seconds of page load
 - [ ] Trade feed shows real-time entries
 - [ ] Probability chart updates live
