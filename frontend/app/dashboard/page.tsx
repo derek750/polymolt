@@ -112,13 +112,13 @@ export default function DashboardPage() {
         {/* Main content: chart + trade feed */}
         {(market || orch.status !== "idle") && (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-stretch">
-              <div className="flex flex-col gap-4 min-h-0">
-                <div className="flex-1 min-h-0">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4" style={{ gridTemplateRows: "560px" }}>
+              <div className="flex flex-col gap-4 min-h-0 h-full">
+                <div className="flex-1 min-h-0 h-full">
                   <MarketPanel market={market} region={null} trades={orch.trades} />
                 </div>
               </div>
-              <div className="min-h-[560px] h-full">
+              <div className="h-full overflow-hidden">
                 <TradeFeed
                   trades={orch.trades}
                   onAgentClick={() => window.location.href = "/agents"}

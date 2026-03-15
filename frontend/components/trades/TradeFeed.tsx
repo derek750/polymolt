@@ -23,7 +23,7 @@ export function TradeFeed({ trades, onAgentClick }: Props) {
   return (
     <>
       {/* Sidebar panel — fills available height, clips overflow */}
-      <div className="flex flex-col bg-white border border-neutral-200 rounded-lg h-full overflow-hidden">
+      <div className="flex flex-col bg-white border border-neutral-200 rounded-lg h-full max-h-full overflow-hidden">
         <div className="flex items-center justify-between px-3 py-2.5 border-b border-neutral-200">
           <span className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Activity</span>
           {trades.length > 0 && (
@@ -36,13 +36,13 @@ export function TradeFeed({ trades, onAgentClick }: Props) {
           )}
         </div>
 
-        <div className="flex-1 overflow-hidden min-h-0">
+        <div className="flex-1 overflow-y-auto min-h-0">
           {trades.length === 0 ? (
             <div className="flex items-center justify-center h-24 text-neutral-400 text-sm">
               Waiting for trades…
             </div>
           ) : (
-            trades.map((trade) => (
+            trades.slice(0, 20).map((trade) => (
               <TradeEntryRow
                 key={trade.id}
                 trade={trade}
