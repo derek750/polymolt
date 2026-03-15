@@ -6,14 +6,23 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.ai.pipeline import run_pipeline
-from app.ai.orchestrator import run_phase1, run_orchestrated_phase2
-from app.ai.rag import add_documents
+from app.ai.orchestrator import (
+    run_phase1,
+    run_orchestrated_phase2,
+    run_orchestrated_pipeline,
+    run_orchestrated_initial,
+)
+from app.ai.rag import add_documents, retrieve, get_collection
 from app.ai.sse import phase1_sse_generator, phase2_sse_generator
 from app.ai.schemas import (
     RunRequest,
     RunResponse,
     ContextRunRequest,
     ContextRunResponse,
+    ChudbotTestRequest,
+    ChudbotTestResponse,
+    RagRetrieveRequest,
+    RagRetrieveResponse,
     Phase1Request,
     Phase1Response,
     Phase2Request,
@@ -48,6 +57,22 @@ def run(request: RunRequest):
         model=request.model,
     )
     return RunResponse(response=response)
+
+
+@router.post("/run/chudbot1", response_model=ChudbotTestResponse)
+def run_chudbot1(request: ChudbotTestRequest):
+    """
+    Convenience endpoint to test the `chudbot1` agent directly.
+    Uses the same pipeline as /ai/run but forces agent_id="chudbot1".
+    """
+    response = run_pipeline(
+        message=request.message,
+        system_prompt=None,
+        agent_id="chudbot1",
+        use_rag=request.use_rag,
+        model=request.model,
+    )
+    return ChudbotTestResponse(response=response)
 
 
 @router.post("/contextrun", response_model=ContextRunResponse)
@@ -138,6 +163,118 @@ def phase2_stream(request: Phase2Request):
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+@router.post("/orchestrate", response_model=Phase2Response)
+def orchestrate(request: Phase1Request):
+    """
+    Full orchestrated pipeline in one call:
+    1. All agents place an initial bet (phase1).
+    2. Orchestrator web-scrapes, identifies expertise, assigns agent(s), runs deep analysis (phase2).
+    """
+    result = run_orchestrated_pipeline(
+        question=request.question,
+        use_rag=request.use_rag,
+        model=request.model,
+        where_filter=request.where_filter,
+    )
+    return Phase2Response(**result)
+
+
+@router.post("/orchestrate/phase1", response_model=Phase1Response)
+def orchestrate_phase1(request: Phase1Request):
+    """
+    Phase 1 only (legacy naming): RAG + all agents place initial bet + web scrape.
+    Same as POST /phase1 but uses run_orchestrated_initial (supports where_filter).
+    """
+    result = run_orchestrated_initial(
+        question=request.question,
+        use_rag=request.use_rag,
+        model=request.model,
+        where_filter=request.where_filter,
+    )
+    return Phase1Response(**result)
+
+
+@router.post("/orchestrate/phase2", response_model=Phase2Response)
+def orchestrate_phase2(request: Phase2Request):
+    """
+    Phase 2 only (legacy naming): pass phase1 result; orchestrator assigns RAG and runs deep analysis.
+    Same as POST /phase2.
+    """
+    bets = [b.model_dump() for b in request.initial_bets]
+    phase2_result = run_orchestrated_phase2(
+        question=request.question,
+        initial_bets=bets,
+        web_scrape_snippets=request.web_scrape_snippets,
+        rag_context=request.rag_context,
+        rag_chunks=request.rag_chunks or None,
+        question_prompt=request.question_prompt or None,
+        model=request.model,
+    )
+    return Phase2Response(
+        question=request.question,
+        initial_bets=request.initial_bets,
+        web_scrape_snippets=request.web_scrape_snippets,
+        rag_context=request.rag_context,
+        rag_chunks=request.rag_chunks,
+        **phase2_result,
+    )
+
+
+@router.post("/rag/retrieve", response_model=RagRetrieveResponse)
+def rag_retrieve(request: RagRetrieveRequest):
+    """
+    Return only the RAG context for a query (no LLM call).
+    Use this to verify that retrieval and embeddings are working.
+    """
+    from app.config import OPENAI_API_KEY
+
+    hint = None
+    if not OPENAI_API_KEY:
+        hint = (
+            "OPENAI_API_KEY is not set. Set it in your environment (or .env in backend/) "
+            "so RAG can compute embeddings for the query and for ingested documents."
+        )
+        return RagRetrieveResponse(
+            query=request.query,
+            context="",
+            has_context=False,
+            hint=hint,
+        )
+
+    try:
+        coll = get_collection(request.collection_name)
+        doc_count = coll.count()
+    except Exception:
+        doc_count = 0
+    if doc_count == 0:
+        hint = (
+            "No documents in the RAG store. Ingest some first, e.g. "
+            'curl -X POST http://localhost:8000/ai/ingest -H "Content-Type: application/json" '
+            '-d \'{"texts": ["Your document text here."]}\''
+        )
+        return RagRetrieveResponse(
+            query=request.query,
+            context="",
+            has_context=False,
+            hint=hint,
+        )
+
+    context = retrieve(
+        request.query,
+        top_k=request.top_k,
+        collection_name=request.collection_name,
+        where_filter=request.where_filter,
+    )
+    if not context.strip():
+        hint = "Retrieval returned no context (embedding or collection issue). Check OPENAI_API_KEY and EMBED_MODEL."
+    return RagRetrieveResponse(
+        query=request.query,
+        context=context,
+        has_context=bool(context.strip()),
+        hint=hint,
     )
 
 

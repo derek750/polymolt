@@ -38,12 +38,40 @@ def generate(
 
 
 def embed(text: str, model: str | None = None) -> list[float]:
-    """Return an embedding vector, routed by available key or model name."""
-    from app.config import OPENAI_API_KEY
+    """Return an embedding vector, routed by available key or model name.
+
+    Falls back to the other provider if the primary one returns nothing.
+    """
+    import logging
+    from app.config import OPENAI_API_KEY, GOOGLE_API_KEY
+
+    _log = logging.getLogger(__name__)
     resolved = (model or "").strip().lower()
-    
-    # If explicit Gemini model or no OpenAI key, use Gemini
-    if resolved.startswith("models/") or not OPENAI_API_KEY:
+    errors: list[str] = []
+
+    if resolved.startswith("models/"):
         return _gemini.embed(text, model=model)
-    
-    return _openai.embed(text, model=model)
+
+    if OPENAI_API_KEY:
+        try:
+            result = _openai.embed(text, model=model)
+            if result:
+                return result
+            errors.append("OpenAI embed returned empty result")
+        except Exception as e:
+            errors.append(f"OpenAI embed error: {e}")
+
+    if GOOGLE_API_KEY:
+        try:
+            result = _gemini.embed(text, model=None)
+            if result:
+                return result
+            errors.append("Gemini embed returned empty result")
+        except Exception as e:
+            errors.append(f"Gemini embed error: {e}")
+
+    if errors:
+        _log.warning("All embed providers failed: %s", "; ".join(errors))
+    else:
+        _log.warning("No API keys configured for embeddings")
+    return []

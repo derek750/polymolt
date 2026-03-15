@@ -18,7 +18,7 @@ NEWS_SAMPLES = [
             {"year": 2024, "location_type": "hospital", "target": "downtown_network"},
             {"year": 2023, "location_type": "nursery", "target": "sickkids"}
         ],
-        "collection_name": "news"
+        "collection_name": "rag"
     },
     {
         "texts": [
@@ -32,7 +32,7 @@ NEWS_SAMPLES = [
             {"year": 2024, "location_type": "attraction", "target": "st_lawrence_market"},
             {"year": 2023, "location_type": "attraction", "target": "rom"}
         ],
-        "collection_name": "news"
+        "collection_name": "rag"
     }
 ]
 

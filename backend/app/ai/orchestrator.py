@@ -26,15 +26,15 @@ from app.ai.pipeline import run_pipeline
 from app.ai.rag import retrieve, retrieve_chunks
 from app.ai.web_scraper import scrape_web
 
-def _debug_log(msg: str):
-    with open("c:/Users/tteth/Downloads/polymolt/polymolt/backend/debug_orchestrator.txt", "a", encoding="utf-8") as f:
-        f.write(f"{msg}\n")
-
 # Placeholder for the question prompt until a real one is wired in.
 QUESTION_PROMPT_PLACEHOLDER = "[Placeholder: question prompt for the prediction market]"
 from app.agents.config import AGENTS, get_agent, AgentConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _debug_log(msg: str):
+    logger.debug(msg)
 
 
 # ── Phase 1: Initial bets ───────────────────────────────────────────────
@@ -444,6 +444,7 @@ def run_phase1(
     question: str,
     use_rag: bool = True,
     model: str | None = None,
+    where_filter: dict | None = None,
 ) -> dict[str, Any]:
     """
     Phase 1: Same as /run but runs every agent with /run.
@@ -452,7 +453,7 @@ def run_phase1(
     3. Web scraping for additional non-AI context.
     """
     if use_rag:
-        rag_chunks = retrieve_chunks(question, top_k=4)
+        rag_chunks = retrieve_chunks(question, top_k=4, where_filter=where_filter)
         rag_context = "\n\n".join(rag_chunks) if rag_chunks else ""
     else:
         rag_chunks = []

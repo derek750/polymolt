@@ -31,6 +31,33 @@ class ContextRunResponse(BaseModel):
     response: str
 
 
+class ChudbotTestRequest(BaseModel):
+    """Convenience request for testing the chudbot1 agent (same as RunRequest)."""
+    message: str
+    use_rag: bool = True
+    model: str | None = None
+
+
+class ChudbotTestResponse(BaseModel):
+    response: str
+
+
+# ── RAG retrieve (no LLM) ──
+
+class RagRetrieveRequest(BaseModel):
+    query: str
+    top_k: int = 4
+    collection_name: str = "rag"
+    where_filter: dict | None = None
+
+
+class RagRetrieveResponse(BaseModel):
+    query: str
+    context: str
+    has_context: bool
+    hint: str | None = None
+
+
 # ── Phase 1 / Phase 2 (orchestrated pipeline) ──
 
 
