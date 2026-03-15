@@ -43,19 +43,16 @@ Polymolt combines RAG pipelines, LMSR market mechanics, and multi-agent orchestr
 **Prediction Pipeline**  
 User Question → RAG Retrieval (Astra DB) → Agent Reasoning (Gemini/OpenAI) → LMSR Bet Sizing → Market Price Update → Frontend Dashboard
 
-### Dual RAG Systems
+**Dual RAG System**  
+Polymolt doesn’t just call “RAG once” — it runs **two separate retrieval pipelines** that play different roles.
 
-Polymolt runs **two distinct RAG pipelines** that feed different parts of the system:
+**Agent RAG – micro, opinionated views**  
+Each specialist agent has its own Astra DB collection with curated documents, guidelines, and guardrails. Prompts are tailored to the agent’s persona (e.g., climate, infrastructure, social resilience), so their bets reflect **narrow, domain‑specific evidence** rather than a generic web search.
 
-- **Agent RAG (micro-perspectives)**  
-  - Each specialist agent has its own Astra DB collection with curated documents and guardrails.  
-  - RAG prompts are tailored to that agent’s persona (e.g., climate, infrastructure, social resilience), so their bets reflect **domain-specific evidence and guidelines**, not a generic internet search.
+**Orchestrator RAG – macro, regional context**  
+A separate Astra DB collection stores **web‑scraped regional data** (local news, policy reports, infrastructure projects, climate risks, etc.). The orchestrator queries this corpus to build a shared regional brief, decide which agents should speak, and provide background context that is injected into their prompts.
 
-- **Orchestrator RAG (macro context)**  
-  - A separate Astra DB collection stores **web‑scraped regional context**: local news, policy reports, infrastructure projects, climate risks, etc.  
-  - The orchestrator queries this corpus to build a shared summary of the region, which is then passed into the agents as high‑level context and used to explain why certain agents should have more weight on a given question.
-
-Together, these two RAG systems let agents reason from focused expertise while the orchestrator keeps everyone grounded in the latest regional reality.
+This split lets agents argue from **focused expertise**, while the orchestrator stays responsible for the **big‑picture, cross‑domain view** of each location.
 
 **Market Engine**  
 Agent Belief → Confidence Scoring → Bet Size Calculation → LMSR Cost Function → Price History Update → SSE broadcast
