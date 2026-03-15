@@ -1,4 +1,4 @@
-"""Prediction market — WebSocket simulation engine and REST endpoints."""
+"""LMSR YES/NO prediction market."""
 
 from app.market.router import router
 
