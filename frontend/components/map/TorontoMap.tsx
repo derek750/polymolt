@@ -4,7 +4,7 @@ import { useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
 import type { MapLayerMouseEvent } from "mapbox-gl"
-import type { SelectedFeature, BetLocation } from "@/types/map"
+import type { SelectedFeature } from "@/types/map"
 
 const TORONTO_CENTER: [number, number] = [-79.3832, 43.6532]
 /** Toronto area bounds: [sw.lng, sw.lat, ne.lng, ne.lat] — lock pan/zoom inside */
@@ -140,9 +140,6 @@ interface TorontoMapProps {
   onError?: (message: string) => void
   animateFromWorld?: boolean
   onFlyComplete?: () => void
-  betLocations?: BetLocation[]
-  onBetMarkerClick?: (bet: BetLocation) => void
-  activeBetId?: number | null
 }
 
 export const TorontoMap = forwardRef<TorontoMapRef, TorontoMapProps>(function TorontoMap({
@@ -154,14 +151,10 @@ export const TorontoMap = forwardRef<TorontoMapRef, TorontoMapProps>(function To
   onError,
   animateFromWorld = true,
   onFlyComplete,
-  betLocations = [],
-  onBetMarkerClick,
-  activeBetId,
 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const pulseMarkerRef = useRef<mapboxgl.Marker | null>(null)
-  const betMarkersRef = useRef<Map<number, mapboxgl.Marker>>(new Map())
 
   useImperativeHandle(ref, () => ({
     flyTo(lng: number, lat: number, zoom = 15) {
@@ -250,76 +243,6 @@ export const TorontoMap = forwardRef<TorontoMapRef, TorontoMapProps>(function To
       pulseMarkerRef.current = null
     }
   }, [pulseCoordinates])
-
-  // Render bet location markers
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-
-    const existing = betMarkersRef.current
-    const currentIds = new Set(betLocations.map((b) => b.questionId))
-
-    // Remove markers no longer in the list
-    existing.forEach((marker, id) => {
-      if (!currentIds.has(id)) {
-        marker.remove()
-        existing.delete(id)
-      }
-    })
-
-    betLocations.forEach((bet) => {
-      if (existing.has(bet.questionId)) {
-        const marker = existing.get(bet.questionId)!
-        const el = marker.getElement()
-        if (activeBetId === bet.questionId) {
-          el.classList.add("bet-marker-active")
-        } else {
-          el.classList.remove("bet-marker-active")
-        }
-        return
-      }
-
-      const total = bet.yesCount + bet.noCount
-      const yesPct = total > 0 ? Math.round((bet.yesCount / total) * 100) : 50
-      const hue = Math.round((yesPct / 100) * 120) // 0=red, 120=green
-
-      const el = document.createElement("div")
-      el.className = "bet-marker"
-      if (activeBetId === bet.questionId) el.classList.add("bet-marker-active")
-      el.style.cssText = `
-        width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
-        background: hsl(${hue}, 65%, 50%);
-        border: 2.5px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.08);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 10px; font-weight: 700; color: white;
-        transition: transform 0.15s, box-shadow 0.15s;
-      `
-      el.textContent = `${yesPct}`
-      el.title = `${bet.location}: ${bet.questionText}`
-
-      el.addEventListener("mouseenter", () => {
-        el.style.transform = "scale(1.25)"
-        el.style.boxShadow = "0 4px 16px rgba(0,0,0,0.35), 0 0 0 2px rgba(59,130,246,0.5)"
-      })
-      el.addEventListener("mouseleave", () => {
-        if (activeBetId !== bet.questionId) {
-          el.style.transform = "scale(1)"
-          el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.08)"
-        }
-      })
-      el.addEventListener("click", (e) => {
-        e.stopPropagation()
-        onBetMarkerClick?.(bet)
-      })
-
-      const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
-        .setLngLat(bet.coordinates)
-        .addTo(map)
-
-      existing.set(bet.questionId, marker)
-    })
-  }, [betLocations, activeBetId, onBetMarkerClick])
 
   const handleMapClick = useCallback(
     (e: MapLayerMouseEvent) => {

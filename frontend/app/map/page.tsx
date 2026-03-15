@@ -158,13 +158,6 @@ export default function MapPage() {
     []
   )
 
-  const handleBetMarkerClick = useCallback(
-    (bet: BetLocation) => {
-      handleBetClick(bet)
-    },
-    [handleBetClick]
-  )
-
   const [searchQuery, setSearchQuery] = useState("")
   const [searching, setSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -241,9 +234,6 @@ export default function MapPage() {
         onError={setMapError}
         animateFromWorld
         onFlyComplete={() => setFlyComplete(true)}
-        betLocations={betLocations}
-        onBetMarkerClick={handleBetMarkerClick}
-        activeBetId={activeBetId}
       />
 
       {/* Top-left controls */}
