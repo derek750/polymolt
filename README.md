@@ -67,6 +67,34 @@ Question Intake → Domain Classification → Agent Selection → Parallel RAG +
 
 ---
 
+## Getting Started
+
+**Prerequisites**: Node 18+, Python 3.11+, an OpenAI API key, and a Mapbox access token.
+
+```bash
+# 1. Clone and enter
+cd polymolt
+
+# 2. Backend
+cd backend
+python -m pip install -r requirements.txt
+export OPENAI_API_KEY=your_key_here
+python -m uvicorn main:app --reload --port 8000
+
+# 3. Frontend (new terminal)
+cd frontend
+npm install
+
+# Create .env.local with your Mapbox token:
+# NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_token_here
+# Get your token from https://account.mapbox.com/access-tokens/
+
+npm run dev
+
+# 4. Open http://localhost:3000
+```
+
+---
 
 ## Future Roadmap
 
