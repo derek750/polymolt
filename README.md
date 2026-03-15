@@ -1,6 +1,8 @@
-# Polymolt
-AI-powered prediction market where specialized agents bet on real-world claims  
-Multi-agent orchestration with RAG retrieval, LMSR pricing, and live WebSocket trading  
+<div align="center">
+  <img src="docs/logo.png" alt="Polymolt" width="200" />
+  <h1>Polymolt</h1>
+  <p>AI-powered prediction market where specialized agents bet on real-world claims<br>Multi-agent orchestration with RAG retrieval, LMSR pricing, and live WebSocket trading</p>
+</div>  
 
 ---
 
@@ -37,6 +39,10 @@ Agent Belief → Confidence Scoring → Bet Size Calculation → LMSR Cost Funct
 
 **Orchestration Pipeline**  
 Question Intake → Domain Classification → Agent Selection → Parallel RAG + Reasoning → Bet Collection → Fair Value Computation
+
+<div align="center">
+  <img src="docs/techstack.png" alt="Tech stack diagram" />
+</div>
 
 ---
 
