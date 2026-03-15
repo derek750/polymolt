@@ -37,6 +37,12 @@ def _debug_log(msg: str):
     logger.debug(msg)
 
 
+def _normalize_answer(answer: str) -> str:
+    """Treat UNKNOWN or invalid answers as NO. Returns YES or NO."""
+    a = (answer or "").strip().upper()
+    return "YES" if a == "YES" else "NO"
+
+
 # ── Phase 1: Initial bets ───────────────────────────────────────────────
 
 _BET_SYSTEM = "You are {agent_name}. {system_prompt}"
@@ -88,7 +94,7 @@ def _run_single_bet(
     return {
         "agent_id": agent.id,
         "agent_name": agent.name,
-        "answer": str(data.get("answer", "UNKNOWN")).upper(),
+        "answer": _normalize_answer(str(data.get("answer", "UNKNOWN"))),
         "confidence": confidence,
         "reasoning": reasoning,
     }
@@ -123,11 +129,11 @@ def _run_single_agent_bet(
     )
     try:
         data = json.loads(raw)
-        answer = str(data.get("answer", "UNKNOWN")).upper()
+        answer = _normalize_answer(str(data.get("answer", "UNKNOWN")))
         reasoning = str(data.get("reasoning", ""))
     except Exception:
         logger.warning("Agent %s pipeline returned non-JSON: %s", agent.id, raw[:200])
-        answer = "UNKNOWN"
+        answer = "NO"  # UNKNOWN → NO
         reasoning = raw
 
     bet_info = get_bet_for_agent(
@@ -332,8 +338,8 @@ of whether the answer is YES or NO, and your overall confidence level.
 
 
 def _parse_agent_analysis(raw_analysis: str) -> tuple[str, str]:
-    """Parse the agent's final deep analysis to extract Answer."""
-    answer = "UNKNOWN"
+    """Parse the agent's final deep analysis to extract Answer. UNKNOWN is treated as NO."""
+    answer = "NO"
     clean_analysis = raw_analysis.strip()
 
     lines = [line.strip() for line in clean_analysis.split("\n") if line.strip()]
@@ -411,11 +417,11 @@ def _run_single_agent_second_bet(
     )
     try:
         data = json.loads(raw)
-        answer = str(data.get("answer", "UNKNOWN")).upper()
+        answer = _normalize_answer(str(data.get("answer", "UNKNOWN")))
         reasoning = str(data.get("reasoning", ""))
     except Exception:
         logger.warning("Agent %s second bet returned non-JSON: %s", agent_id, raw[:200])
-        answer = "UNKNOWN"
+        answer = "NO"  # UNKNOWN → NO
         reasoning = raw
 
     bet_info = get_bet_for_agent(
@@ -554,7 +560,7 @@ def run_orchestrated_phase2(
     # Legacy / Phase2Response: primary = first triggered agent
     primary = triggered_agents[0] if triggered_agents else {
         "agent_id": "none", "agent_name": "None", "choice_reasoning": "None",
-        "context": "", "answer": "UNKNOWN", "confidence": 0, "analysis": "No agents triggered.",
+        "context": "", "answer": "NO", "confidence": 0, "analysis": "No agents triggered.",
     }
 
     # Phase2Response also expects relevant_agents_with_rag and second_bets

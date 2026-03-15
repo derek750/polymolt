@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from app.config import CHAT_MODEL, CHAT_MAX_TOKENS, OPENAI_API_KEY
+from app.config import CHAT_MODEL, CHAT_MAX_TOKENS, DEFAULT_MODEL_NO_TOKENS, OPENAI_API_KEY
 from app.models import generate
 from app.ai.rag import retrieve
 from app.agents.config import get_agent
@@ -31,13 +31,13 @@ def _resolve_system_prompt(system_prompt: str | None, agent_id: str | None) -> s
 
 
 def _resolve_model(model_override: str | None, agent_id: str | None) -> str:
-    if model_override:
+    if model_override and model_override.strip():
         return model_override.strip()
     if agent_id:
         agent = get_agent(agent_id)
-        if agent and agent.model:
-            return agent.model
-    return CHAT_MODEL
+        if agent and agent.model and agent.model.strip():
+            return agent.model.strip()
+    return (CHAT_MODEL or DEFAULT_MODEL_NO_TOKENS).strip() or DEFAULT_MODEL_NO_TOKENS
 
 
 def run_pipeline(
