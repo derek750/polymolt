@@ -35,13 +35,34 @@ router = APIRouter(prefix="/db", tags=["database"])
 @router.get("/health")
 def db_health():
     """
-    Lightweight health check for the Db2 integration.
-
-    This does NOT open a real Db2 connection; it only indicates that the
-    API is wired up. Use a real Db2 monitoring tool or a dedicated route
-    if you need a deeper check.
+    Health check for the Db2 integration. Tests actual connection.
     """
-    return {"status": "ok", "message": "Db2 integration ready (connection tested on write)."}
+    from app.db.db2 import db2_connection, DB2_DSN
+    
+    if not DB2_DSN:
+        return {
+            "status": "error",
+            "message": "DB2_DSN environment variable is not set.",
+            "available": False,
+        }
+    
+    try:
+        with db2_connection() as conn:
+            # Test query
+            import ibm_db
+            stmt = ibm_db.exec_immediate(conn, "SELECT 1 FROM SYSIBM.SYSDUMMY1")
+            ibm_db.fetch_row(stmt)
+        return {
+            "status": "ok",
+            "message": "Db2 connection successful",
+            "available": True,
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "message": f"Db2 connection failed: {str(exc)}",
+            "available": False,
+        }
 
 
 @router.post("/questions", response_model=SaveQuestionResponse)
@@ -52,6 +73,8 @@ def save_question(request: SaveQuestionRequest) -> SaveQuestionResponse:
     Call this from your question pipeline once you have:
       - the final location label
       - the full set of stakeholder AIs and their yes/no answers
+    
+    If DB2 is unavailable, logs a warning but does not fail the orchestration.
     """
     try:
         perspectives = [
@@ -73,8 +96,12 @@ def save_question(request: SaveQuestionRequest) -> SaveQuestionResponse:
             location=request.location,
             perspectives=perspectives,
         )
-    except Exception as exc:  # broad but translated to HTTP error for the API client
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:  # Log but don't crash - DB2 is optional
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to save question to DB2 (DB2 may be unavailable): {exc}")
+        # Return a dummy ID - the orchestration should continue even if DB2 fails
+        return SaveQuestionResponse(question_id=-1)
 
     return SaveQuestionResponse(question_id=question_id)
 
@@ -102,11 +129,17 @@ def create_question_basic(request: CreateQuestionOnlyRequest) -> SaveQuestionRes
 def list_questions(limit: int = 50) -> QuestionListResponse:
     """
     List recent questions with simple yes/no counts.
+    
+    Returns empty list if DB2 is unavailable (graceful degradation).
     """
     try:
         rows = list_recent_questions(limit=limit)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"DB2 unavailable, returning empty list: {exc}")
+        # Graceful degradation: return empty list instead of crashing
+        return QuestionListResponse(questions=[])
 
     questions = [
         QuestionSummaryOut(
@@ -132,7 +165,10 @@ def get_question(question_id: int) -> QuestionDetailResponse:
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"DB2 unavailable for question {question_id}: {exc}")
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {str(exc)}") from exc
 
     # Compute aggregated counts to reuse QuestionSummaryOut
     yes_count = sum(1 for r in resp_rows if r.answer.upper() == "YES")

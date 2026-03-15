@@ -40,7 +40,34 @@ except ImportError as e:
 logger = logging.getLogger(__name__)
 
 
-DB2_DSN = os.getenv("DB2_DSN", "")
+def _get_db2_dsn() -> str:
+    """
+    Get DB2 connection string from environment.
+    
+    Supports two formats:
+    1. Single DB2_DSN variable: "DATABASE=bludb;HOSTNAME=...;PORT=...;PROTOCOL=TCPIP;UID=...;PWD=..."
+    2. Separate variables: DB2_DSN_DATABASE, DB2_DSN_HOSTNAME, DB2_DSN_PORT, DB2_DSN_UID, DB2_DSN_PWD
+    """
+    # Try single DB2_DSN first (backward compatible)
+    dsn = os.getenv("DB2_DSN", "")
+    if dsn:
+        return dsn
+    
+    # Try constructing from separate variables
+    database = os.getenv("DB2_DSN_DATABASE", "")
+    hostname = os.getenv("DB2_DSN_HOSTNAME", "")
+    port = os.getenv("DB2_DSN_PORT", "")
+    uid = os.getenv("DB2_DSN_UID", "")
+    pwd = os.getenv("DB2_DSN_PWD", "")
+    protocol = os.getenv("DB2_DSN_PROTOCOL", "TCPIP")
+    
+    if database and hostname and port and uid and pwd:
+        return f"DATABASE={database};HOSTNAME={hostname};PORT={port};PROTOCOL={protocol};UID={uid};PWD={pwd}"
+    
+    return ""
+
+
+DB2_DSN = _get_db2_dsn()
 
 
 @dataclass

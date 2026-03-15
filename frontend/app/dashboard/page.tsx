@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useOrchestration } from "@/lib/OrchestrationContext"
 import { Header } from "@/components/header/Header"
@@ -10,6 +11,7 @@ import { AgentReasoningDrawer } from "@/components/trades/AgentReasoningDrawer"
 import type { MarketState, Region } from "@/types/market"
 
 export default function DashboardPage() {
+  const router = useRouter()
   const orch = useOrchestration()
   const [hasStarted, setHasStarted] = useState(false)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
@@ -60,7 +62,7 @@ export default function DashboardPage() {
           orch.reset()
           setHasStarted(false)
         }}
-        onOpenQuestions={() => {}}
+        onOpenQuestions={() => router.push("/questions")}
       />
 
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-5 max-w-[1400px] mx-auto w-full">
