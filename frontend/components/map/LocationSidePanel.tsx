@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { X } from "lucide-react"
 import type { SelectedFeature } from "@/types/map"
-import type { Message } from "@/types/map"
 import type { HistoryItem } from "@/types/map"
 import { askLocation, getLocationHistory } from "@/lib/locationApi"
 
@@ -13,32 +13,18 @@ interface LocationSidePanelProps {
   isMobile: boolean
 }
 
-function TypingIndicator() {
-  return (
-    <div className="flex items-center gap-1 py-2 px-3 rounded-2xl rounded-bl-sm bg-neutral-100 text-neutral-500 w-fit">
-      <span className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
-      <span className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
-      <span className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
-    </div>
-  )
-}
-
 export function LocationSidePanel({ feature, onClose, isMobile }: LocationSidePanelProps) {
-  const [messages, setMessages] = useState<Message[]>([])
+  const router = useRouter()
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setMessages([])
-    setError(null)
     setHistory([])
-    setHistoryOpen(false)
+    setError(null)
     setLoadingHistory(true)
     getLocationHistory(feature.name)
       .then(setHistory)
@@ -46,21 +32,10 @@ export function LocationSidePanel({ feature, onClose, isMobile }: LocationSidePa
       .finally(() => setLoadingHistory(false))
   }, [feature.name, feature.coordinates?.join(",")])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
-
   const sendMessage = async () => {
     const q = input.trim()
     if (!q || sending) return
     setInput("")
-    const userMsg: Message = {
-      id: `u-${Date.now()}`,
-      role: "user",
-      content: q,
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, userMsg])
     setSending(true)
     setError(null)
     try {
@@ -71,44 +46,22 @@ export function LocationSidePanel({ feature, onClose, isMobile }: LocationSidePa
         question: q,
       })
       const answer = (res as { answer?: string }).answer ?? "No response."
-      const assistantMsg: Message = {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        content: answer,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, assistantMsg])
-      setHistory((prev) => [...prev, { id: `h-${Date.now()}`, question: q, answer, createdAt: new Date().toISOString() }])
+      setHistory((prev) => [
+        ...prev,
+        { id: `h-${Date.now()}`, question: q, answer, createdAt: new Date().toISOString() },
+      ])
+      router.push("/dashboard")
+      onClose()
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : "Request failed"
       setError(errMsg)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err-${Date.now()}`,
-          role: "assistant",
-          content: `Error: ${errMsg}`,
-          timestamp: new Date(),
-        },
-      ])
     } finally {
       setSending(false)
     }
   }
 
-  const retryLast = () => {
-    setError(null)
-    const lastUser = [...messages].reverse().find((m) => m.role === "user")
-    if (lastUser) {
-      setMessages((prev) => prev.filter((m) => m.id !== lastUser.id && !m.id.startsWith("err-")))
-      setInput(lastUser.content)
-      inputRef.current?.focus()
-    }
-  }
-
   const askAgain = (question: string) => {
     setInput(question)
-    setHistoryOpen(false)
     inputRef.current?.focus()
   }
 
@@ -119,138 +72,107 @@ export function LocationSidePanel({ feature, onClose, isMobile }: LocationSidePa
 
   return (
     <div
-      className={`fixed flex flex-col bg-black/40 backdrop-blur-xl shadow-2xl z-50 ${isMobile ? "left-0 right-0 bottom-0 max-h-[85vh] rounded-t-2xl border-t border-white/10 animate-slide-in-bottom" : "top-0 right-0 h-full w-[380px] border-l border-white/10 animate-slide-in-right"}`}
-      style={isMobile ? undefined : { width: panelWidth }}
+      className={`fixed top-0 z-40 flex flex-col bg-white shadow-2xl border-l border-neutral-200 overflow-hidden ${isMobile ? "left-0 right-0 bottom-0 max-h-[85vh] rounded-t-2xl" : "right-0 h-full"}`}
+      style={!isMobile ? { width: panelWidth } : undefined}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="location-panel-title"
     >
-      {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b border-white/10">
-        <div className="flex items-start justify-between gap-2">
+      <div className="flex-shrink-0 flex items-start justify-between gap-3 p-5 border-b border-neutral-100">
           <div className="min-w-0">
-            <h2 className="font-semibold text-white text-lg truncate">{feature.name}</h2>
-            <span className="inline-block mt-1 px-2 py-0.5 rounded text-xs bg-white/20 text-white/90">
+            <h2 id="location-panel-title" className="font-semibold text-neutral-900 text-lg truncate">
+              {feature.name}
+            </h2>
+            <span className="inline-block mt-1.5 px-2 py-0.5 rounded-md text-xs bg-neutral-100 text-neutral-600">
               {feature.type}
             </span>
-            <p className="mt-1 text-xs text-white/50">{coordText}</p>
+            <p className="mt-1 text-xs text-neutral-400">{coordText}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+            className="flex-shrink-0 p-2 rounded-lg hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700 transition-colors"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-      </div>
 
-      {/* Chat */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.length === 0 && !loadingHistory && (
-            <p className="text-sm text-white/50">Ask a question about this location.</p>
-          )}
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                  m.role === "user"
-                    ? "bg-blue-500 text-white rounded-br-sm"
-                    : m.id.startsWith("err-")
-                      ? "bg-red-500/20 text-red-200 rounded-bl-sm"
-                      : "bg-white/10 text-white rounded-bl-sm"
-                }`}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div>
+            <label htmlFor="location-question-input" className="block text-sm font-medium text-neutral-700 mb-2">
+              Ask a question about this place
+            </label>
+            <div className="flex gap-2">
+              <input
+                ref={inputRef}
+                id="location-question-input"
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    sendMessage()
+                  }
+                }}
+                placeholder="e.g. Is this place accessible?"
+                className="flex-1 rounded-xl border border-neutral-200 bg-neutral-50 text-neutral-900 placeholder-neutral-400 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
+              />
+              <button
+                type="button"
+                onClick={sendMessage}
+                disabled={!input.trim() || sending}
+                className="px-4 py-2.5 rounded-xl bg-neutral-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-800 transition-colors"
               >
-                {m.content}
-                {m.id.startsWith("err-") && (
-                  <button
-                    type="button"
-                    onClick={retryLast}
-                    className="block mt-2 text-xs underline text-red-200 hover:text-white"
-                  >
-                    Retry
-                  </button>
-                )}
-              </div>
+                {sending ? "…" : "Ask"}
+              </button>
             </div>
-          ))}
-          {sending && (
-            <div className="flex justify-start">
-              <TypingIndicator />
-            </div>
-          )}
-        </div>
-        <div className="flex-shrink-0 p-4 border-t border-white/10">
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault()
-                  sendMessage()
-                }
-              }}
-              placeholder="Ask about this place..."
-              className="flex-1 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-white/30"
-            />
-            <button
-              type="button"
-              onClick={sendMessage}
-              disabled={!input.trim() || sending}
-              className="px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
-            >
-              Send
-            </button>
+            {error && (
+              <p className="mt-2 text-sm text-red-600 flex items-center gap-2">
+                {error}
+                <button type="button" onClick={() => setError(null)} className="underline">
+                  Dismiss
+                </button>
+              </p>
+            )}
+            <p className="mt-2 text-xs text-neutral-500">
+              After you ask, you&apos;ll be taken to the market view to see predictions and the graph.
+            </p>
           </div>
-        </div>
-      </div>
 
-      {/* Past questions */}
-      <div className="flex-shrink-0 border-t border-white/10">
-        <button
-          type="button"
-          onClick={() => setHistoryOpen((o) => !o)}
-          className="w-full flex items-center justify-between px-4 py-3 text-left text-sm text-white/80 hover:bg-white/5 transition-colors"
-        >
-          <span>Past questions</span>
-          <span className="text-white/50">{history.length}</span>
-        </button>
-        {historyOpen && (
-          <div className="max-h-48 overflow-y-auto px-4 pb-4 space-y-2">
+          <div>
+            <h3 className="text-sm font-medium text-neutral-700 mb-3">Past questions</h3>
             {loadingHistory ? (
-              <p className="text-xs text-white/50">Loading...</p>
+              <p className="text-sm text-neutral-500">Loading…</p>
             ) : history.length === 0 ? (
-              <p className="text-xs text-white/50">No previous questions.</p>
+              <p className="text-sm text-neutral-500">No previous questions for this location yet.</p>
             ) : (
-              history.map((item) => (
-                <details
-                  key={item.id}
-                  className="group rounded-lg bg-white/5 border border-white/10 overflow-hidden"
-                >
-                  <summary className="px-3 py-2 text-sm text-white/90 cursor-pointer list-none">
-                    <span className="truncate block">{item.question}</span>
-                  </summary>
-                  <div className="px-3 py-2 pt-0 text-sm text-white/70 border-t border-white/10">
-                    {item.answer}
-                    <button
-                      type="button"
-                      onClick={() => askAgain(item.question)}
-                      className="mt-2 block text-xs text-blue-300 hover:text-blue-200"
-                    >
-                      Ask again
-                    </button>
-                  </div>
-                </details>
-              ))
+              <ul className="space-y-3">
+                {history.map((item) => (
+                  <li
+                    key={item.id}
+                    className="rounded-xl border border-neutral-200 bg-neutral-50/80 overflow-hidden"
+                  >
+                    <div className="px-3 py-2.5 border-b border-neutral-200/80">
+                      <p className="text-sm font-medium text-neutral-900">{item.question}</p>
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <p className="text-sm text-neutral-600 whitespace-pre-wrap">{item.answer}</p>
+                      <button
+                        type="button"
+                        onClick={() => askAgain(item.question)}
+                        className="mt-2 text-xs font-medium text-neutral-900 hover:underline"
+                      >
+                        Ask again
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        )}
-      </div>
+        </div>
     </div>
   )
 }
