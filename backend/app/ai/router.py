@@ -167,6 +167,7 @@ def orchestrate(request: Phase1Request):
     Full orchestrated pipeline in one call:
     1. All agents place an initial bet (phase1).
     2. Orchestrator web-scrapes, identifies expertise, assigns agent(s), runs deep analysis (phase2).
+    Saves the full response (question, initial_bets, triggered_agents, deep_analysis, etc.) to Db2.
     """
     result = run_orchestrated_pipeline(
         question=request.question,
@@ -175,6 +176,16 @@ def orchestrate(request: Phase1Request):
         model=request.model,
         where_filter=request.where_filter,
     )
+    try:
+        from app.db.db2 import save_orchestrate_response
+        save_orchestrate_response(
+            question=request.question,
+            location="",
+            response=result,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to save orchestrate response to Db2: %s", e)
     return Phase2Response(**result)
 
 
