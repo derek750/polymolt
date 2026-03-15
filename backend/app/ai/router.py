@@ -225,7 +225,10 @@ def rag_retrieve(request: RagRetrieveRequest):
         doc_count = coll.count_documents(filter={}, upper_bound=100_000)
     except RuntimeError as e:
         if "Astra" in str(e) or "ASTRA" in str(e):
-            hint = "Astra DB is not configured. Set ASTRA_DB_API_ENDPOINT and ASTRA_DB_APPLICATION_TOKEN in .env."
+            hint = (
+                "Astra DB is not configured. Agents RAG: ASTRA_DB_API_ENDPOINT, ASTRA_DB_APPLICATION_TOKEN. "
+                "Orchestrator RAG: ASTRA_DB_ORCHESTRATOR_API_ENDPOINT, ASTRA_DB_ORCHESTRATOR_APPLICATION_TOKEN."
+            )
             return RagRetrieveResponse(query=request.query, context="", has_context=False, hint=hint)
         doc_count = 0
     except Exception:

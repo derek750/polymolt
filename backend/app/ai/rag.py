@@ -1,24 +1,41 @@
 """
 RAG: embed query and retrieve from vector store.
-Uses DataStax Astra DB (astrapy). Set ASTRA_DB_API_ENDPOINT and ASTRA_DB_APPLICATION_TOKEN.
+Uses two DataStax Astra DBs:
+- Agents RAG (guidelines): ASTRA_DB_* → sample_rag (ingest_sample.py)
+- Orchestrator RAG (news):  ASTRA_DB_ORCHESTRATOR_* → news_rag (ingest_news.py)
 """
 
 from __future__ import annotations
 
 import logging
+from typing import Any, Literal
 
 from app.config import (
     ASTRA_DB_API_ENDPOINT,
     ASTRA_DB_APPLICATION_TOKEN,
     ASTRA_DB_KEYSPACE,
+    ASTRA_DB_ORCHESTRATOR_API_ENDPOINT,
+    ASTRA_DB_ORCHESTRATOR_APPLICATION_TOKEN,
+    ASTRA_DB_ORCHESTRATOR_KEYSPACE,
     ASTRA_EMBED_DIMENSION,
 )
 from app.models import embed
 
 logger = logging.getLogger(__name__)
 
+RAG_DB_AGENTS = "agents"
+RAG_DB_ORCHESTRATOR = "orchestrator"
+RAG_DB = Literal["agents", "orchestrator"]
+
 _client = None
-_database = None
+_databases: dict[str, Any] = {}
+
+
+def _which_db_for_collection(collection_name: str) -> RAG_DB:
+    """Use orchestrator DB for news_rag (and its dimension-suffixed names), agents DB for everything else."""
+    if collection_name.startswith("news_rag"):
+        return RAG_DB_ORCHESTRATOR
+    return RAG_DB_AGENTS
 
 
 def _get_client():
@@ -29,20 +46,29 @@ def _get_client():
     return _client
 
 
-def _get_database():
-    global _database
-    if _database is None:
-        if not ASTRA_DB_API_ENDPOINT or not ASTRA_DB_APPLICATION_TOKEN:
-            raise RuntimeError(
-                "Astra DB is not configured. Set ASTRA_DB_API_ENDPOINT and ASTRA_DB_APPLICATION_TOKEN."
-            )
+def _get_database(which: RAG_DB):
+    global _databases
+    if which not in _databases:
+        if which == RAG_DB_ORCHESTRATOR:
+            endpoint = ASTRA_DB_ORCHESTRATOR_API_ENDPOINT
+            token = ASTRA_DB_ORCHESTRATOR_APPLICATION_TOKEN
+            keyspace = ASTRA_DB_ORCHESTRATOR_KEYSPACE
+            if not endpoint or not token:
+                raise RuntimeError(
+                    "Orchestrator Astra DB is not configured. "
+                    "Set ASTRA_DB_ORCHESTRATOR_API_ENDPOINT and ASTRA_DB_ORCHESTRATOR_APPLICATION_TOKEN."
+                )
+        else:
+            endpoint = ASTRA_DB_API_ENDPOINT
+            token = ASTRA_DB_APPLICATION_TOKEN
+            keyspace = ASTRA_DB_KEYSPACE
+            if not endpoint or not token:
+                raise RuntimeError(
+                    "Agents Astra DB is not configured. Set ASTRA_DB_API_ENDPOINT and ASTRA_DB_APPLICATION_TOKEN."
+                )
         client = _get_client()
-        _database = client.get_database(
-            ASTRA_DB_API_ENDPOINT,
-            token=ASTRA_DB_APPLICATION_TOKEN,
-            keyspace=ASTRA_DB_KEYSPACE,
-        )
-    return _database
+        _databases[which] = client.get_database(endpoint, token=token, keyspace=keyspace)
+    return _databases[which]
 
 
 def _vector_definition(dimension: int | None = None):
@@ -58,10 +84,12 @@ def _vector_definition(dimension: int | None = None):
 
 
 def get_collection(name: str = "rag", embedding_dimension: int | None = None):
-    """Get or create the RAG vector collection in Astra DB.
+    """Get or create the RAG vector collection in the appropriate Astra DB.
+    Which DB is inferred from name: news_rag* → orchestrator DB, else → agents DB.
     When creating a new collection, uses embedding_dimension if provided, else ASTRA_EMBED_DIMENSION.
     """
-    db = _get_database()
+    which = _which_db_for_collection(name)
+    db = _get_database(which)
     try:
         return db.create_collection(
             name, definition=_vector_definition(embedding_dimension)
@@ -79,7 +107,7 @@ def add_documents(
     collection_name: str = "rag",
     metadatas: list[dict] | None = None,
 ) -> None:
-    """Add documents to the vector store (embeds and stores)."""
+    """Add documents to the vector store (embeds and stores). Uses agents DB for sample_rag*, orchestrator DB for news_rag*."""
     if not texts:
         return
     if ids is None:
@@ -126,13 +154,15 @@ def retrieve_chunks(
 ) -> list[str]:
     """
     Retrieve top_k document chunks for the query (by vector similarity).
+    Uses agents DB for sample_rag/rag*, orchestrator DB for news_rag*.
     Returns list of document text strings.
     Uses collection_name_{dimension} so it matches the collection used by add_documents for the same embed model.
     """
+    which = _which_db_for_collection(collection_name)
     try:
-        db = _get_database()
+        db = _get_database(which)
     except Exception as e:
-        logger.debug("Astra get_database failed: %s", e)
+        logger.debug("Astra get_database (%s) failed: %s", which, e)
         return []
 
     emb = embed(query)

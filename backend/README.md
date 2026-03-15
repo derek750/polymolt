@@ -45,11 +45,19 @@ Response:
 - **EMBED_MODEL** (optional): Default `text-embedding-3-small`.
 - **CHAT_MODEL** (optional): Default `gpt-4o-mini`.
 
-## RAG (Astra DB)
+## RAG (two Astra DBs)
 
-- The app uses **DataStax Astra DB** as the vector store (via `astrapy`). If Astra is not configured or no documents have been added, RAG returns no context.
-- **Env:** `ASTRA_DB_API_ENDPOINT` (e.g. `https://<db-id>-<region>.apps.astra.datastax.com`), `ASTRA_DB_APPLICATION_TOKEN` (e.g. `AstraCS:...`). Optional: `ASTRA_DB_KEYSPACE` (default `default_keyspace`), `ASTRA_EMBED_DIMENSION` (default `1536` for text-embedding-3-small).
-- To add documents, use `app.ai.rag`: `add_documents(texts, ids=..., collection_name=..., metadatas=...)`.
+The app uses **two DataStax Astra DB** vector stores (via `astrapy`):
+
+| DB | Purpose | Collection | Ingest script |
+|----|---------|------------|---------------|
+| **Agents** | Guidelines / sample context for agents | `sample_rag` | `ingest_sample.py` |
+| **Orchestrator** | Scraped news for orchestrator | `news_rag` | `ingest_news.py` |
+
+- **Agents RAG (guidelines):** `ASTRA_DB_API_ENDPOINT`, `ASTRA_DB_APPLICATION_TOKEN`. Optional: `ASTRA_DB_KEYSPACE` (default `default_keyspace`), `ASTRA_EMBED_DIMENSION` (default `1536`).
+- **Orchestrator RAG (news):** `ASTRA_DB_ORCHESTRATOR_API_ENDPOINT`, `ASTRA_DB_ORCHESTRATOR_APPLICATION_TOKEN`. Optional: `ASTRA_DB_ORCHESTRATOR_KEYSPACE` (default `default_keyspace`).
+
+If a DB is not configured or no documents have been added for that collection, RAG returns no context for that path. To add documents: `add_documents(texts, ids=..., collection_name=..., metadatas=...)`; use `collection_name="sample_rag"` for agents, `collection_name="news_rag"` for orchestrator (ingest scripts set this automatically).
 
 ## IBM Db2 — saving orchestrate responses
 
