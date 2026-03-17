@@ -8,7 +8,7 @@ from app.config import GOOGLE_API_KEY
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-1.5-flash"
+DEFAULT_MODEL = "gemini-flash-latest"
 DEFAULT_EMBED_MODEL = "models/gemini-embedding-001"
 
 

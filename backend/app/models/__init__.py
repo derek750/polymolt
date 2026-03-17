@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import logging
 
-from app.config import CHAT_MODEL, DEFAULT_MODEL_NO_TOKENS
-from app.models import openai as _openai
+from app.config import CHAT_MODEL, DEFAULT_MODEL_NO_TOKENS, GOOGLE_API_KEY
+from app.models import openai as _openai  # kept for compatibility, but not used by default
 from app.models import gemini as _gemini
 
 _log = logging.getLogger(__name__)
@@ -35,14 +35,26 @@ def generate(
     max_tokens: int = 1024,
     json_mode: bool = False,
 ) -> str:
-    """Generate text with proper system/user separation, routed by model name."""
+    """Generate text with proper system/user separation, **always using Gemini**.
+
+    Even if callers pass an OpenAI-style model name, this router will send the
+    request to the Gemini provider so the whole system runs on a single stack.
+    """
     resolved = (model or CHAT_MODEL or DEFAULT_MODEL_NO_TOKENS).strip() or DEFAULT_MODEL_NO_TOKENS
-    if _is_gemini(resolved):
-        return _gemini.generate(
-            user_prompt, system_prompt=system_prompt, model=resolved, max_tokens=max_tokens, json_mode=json_mode,
-        )
-    return _openai.generate(
-        user_prompt, system_prompt=system_prompt, model=resolved, max_tokens=max_tokens, json_mode=json_mode,
+
+    # If GOOGLE_API_KEY is missing, surface a clear error instead of silently
+    # trying to hit OpenAI.
+    if not GOOGLE_API_KEY:
+        _log.error("GOOGLE_API_KEY is not set — Gemini is required as the sole provider.")
+        return "Error: GOOGLE_API_KEY is not set (Gemini provider is required)."
+
+    return _gemini.generate(
+        user_prompt,
+        system_prompt=system_prompt,
+        # If a Gemini model name is provided, respect it; otherwise use default.
+        model=resolved if _is_gemini(resolved) else None,
+        max_tokens=max_tokens,
+        json_mode=json_mode,
     )
 
 
